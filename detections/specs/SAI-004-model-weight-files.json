@@ -1,0 +1,20 @@
+{
+  "id": "SAI-004",
+  "title": "Local model-weight file activity",
+  "objective": "Identify creation, modification, or renaming of model-weight files associated with local inference or model development.",
+  "status": "hunting",
+  "evidence_level": 1,
+  "confidence": "high",
+  "signal_families": ["endpoint"],
+  "required_fields": ["timestamp", "device_id", "file_name", "file_action"],
+  "limitations": [
+    "File presence does not prove model execution or sensitive-data processing.",
+    "Some model formats are shared with legitimate approved development workflows.",
+    "Endpoint file telemetry may miss files created before onboarding or during retention gaps."
+  ],
+  "platforms": ["microsoft-defender"],
+  "references": [
+    "https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-devicefileevents-table"
+  ]
+}
+

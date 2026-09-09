@@ -1,0 +1,28 @@
+// SAI-002: Non-browser process accessing an AI service
+// Mode: Hunting. Review automation, ownership, credentials, and data source before escalation.
+// Table: DeviceNetworkEvents
+{{AI_CATALOG_KQL}}
+let Lookback = 7d;
+let CommonBrowsers = dynamic(["chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe", "safari", "chrome", "firefox", "msedge"]);
+DeviceNetworkEvents
+| where Timestamp > ago(Lookback)
+| where isnotempty(RemoteUrl) and RemoteUrl has_any (ShadowAI_Domains)
+| where tolower(InitiatingProcessFileName) !in (CommonBrowsers)
+| extend NormalizedUrl = iif(RemoteUrl matches regex @"^[A-Za-z][A-Za-z0-9+.-]*://", RemoteUrl, strcat("https://", RemoteUrl))
+| extend Host = tolower(trim_end(@"\.$", tostring(parse_url(NormalizedUrl).Host)))
+| extend DomainCandidates = ShadowAI_Domains
+| mv-apply MatchedDomain = DomainCandidates to typeof(string) on (
+    where Host == MatchedDomain or Host endswith strcat(".", MatchedDomain)
+)
+| lookup kind=leftouter ShadowAI_Catalog on MatchedDomain
+| extend User = iif(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, strcat(InitiatingProcessAccountDomain, "\\", InitiatingProcessAccountName))
+| extend RedactedCommand = replace_regex(InitiatingProcessCommandLine, @"(?i)(api[_-]?key|token|secret|password|bearer)(\s*[:=]\s*|\s+)[^\s;]+", @"\1=[REDACTED]")
+| summarize
+    Connections = count(),
+    FirstSeen = min(Timestamp),
+    LastSeen = max(Timestamp),
+    SampleCommands = make_set(RedactedCommand, 5),
+    SampleUrls = make_set(RemoteUrl, 5)
+  by DeviceId, DeviceName, User, InitiatingProcessFileName, InitiatingProcessSHA1, MatchedDomain, ProviderId, ProviderName, ProductName, Capability
+| extend EvidenceLevel = 2, Confidence = "High", Disposition = "Unreviewed"
+| order by Connections desc

@@ -1,0 +1,11 @@
+// SAI-006: AI-related browser extension inventory
+// Mode: Defender XDR hunting only. This TVM table is not ingested into Sentinel.
+// Table: DeviceTvmBrowserExtensions
+let AI_NameTerms = dynamic(["chatgpt", "claude", "gemini", "copilot", "perplexity", "ai assistant", "ai writer", "llm"]);
+DeviceTvmBrowserExtensions
+| where IsActivated =~ "true"
+| where ExtensionName has_any (AI_NameTerms) or ExtensionDescription has_any (AI_NameTerms)
+| project DeviceId, BrowserName, ExtensionId, ExtensionName, ExtensionVendor, ExtensionVersion, ExtensionRisk, InstallationTime
+| extend EvidenceLevel = 1, Confidence = "Low", Disposition = "Unreviewed"
+| order by InstallationTime desc
+

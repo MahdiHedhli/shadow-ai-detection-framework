@@ -1,0 +1,26 @@
+// SAI-001: AI service access from a managed endpoint
+// Mode: Hunting / baseline. This establishes access, not data transfer.
+// Table: DeviceNetworkEvents
+{{AI_CATALOG_KQL}}
+let Lookback = 7d;
+DeviceNetworkEvents
+| where Timestamp > ago(Lookback)
+| where isnotempty(RemoteUrl) and RemoteUrl has_any (ShadowAI_Domains)
+| extend NormalizedUrl = iif(RemoteUrl matches regex @"^[A-Za-z][A-Za-z0-9+.-]*://", RemoteUrl, strcat("https://", RemoteUrl))
+| extend Host = tolower(trim_end(@"\.$", tostring(parse_url(NormalizedUrl).Host)))
+| extend DomainCandidates = ShadowAI_Domains
+| mv-apply MatchedDomain = DomainCandidates to typeof(string) on (
+    where Host == MatchedDomain or Host endswith strcat(".", MatchedDomain)
+)
+| lookup kind=leftouter ShadowAI_Catalog on MatchedDomain
+| extend User = iif(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, strcat(InitiatingProcessAccountDomain, "\\", InitiatingProcessAccountName))
+| summarize
+    Connections = count(),
+    FirstSeen = min(Timestamp),
+    LastSeen = max(Timestamp),
+    Processes = make_set(InitiatingProcessFileName, 10),
+    SampleUrls = make_set(RemoteUrl, 5)
+  by DeviceId, DeviceName, User, MatchedDomain, ProviderId, ProviderName, ProductName, Capability, Channel
+| extend EvidenceLevel = 2, Confidence = "Medium", Disposition = "Unreviewed"
+| order by Connections desc
+

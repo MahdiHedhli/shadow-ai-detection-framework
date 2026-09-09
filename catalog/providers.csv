@@ -1,0 +1,38 @@
+indicator_id,provider_id,provider_name,product_name,indicator_type,indicator,capability,channel,source_url,last_validated,notes
+net-openai-001,openai,OpenAI,ChatGPT and OpenAI API,registered_domain,openai.com,generative_ai,web_api,https://openai.com,2026-09-02,Covers documented OpenAI subdomains after boundary validation
+net-openai-002,openai,OpenAI,ChatGPT,registered_domain,chatgpt.com,generative_ai,web,https://chatgpt.com,2026-09-02,
+net-openai-003,openai,OpenAI,OpenAI content delivery,registered_domain,oaiusercontent.com,generative_ai,web,https://openai.com,2026-09-02,Content delivery is presence evidence only
+net-anthropic-001,anthropic,Anthropic,Claude,registered_domain,claude.ai,generative_ai,web,https://claude.ai,2026-09-02,
+net-anthropic-002,anthropic,Anthropic,Claude API,registered_domain,anthropic.com,generative_ai,web_api,https://www.anthropic.com,2026-09-02,
+net-google-001,google,Google,Gemini,fqdn,gemini.google.com,generative_ai,web,https://gemini.google.com,2026-09-02,Do not broaden to google.com
+net-google-002,google,Google,Google AI Studio,fqdn,aistudio.google.com,generative_ai,web,https://aistudio.google.com,2026-09-02,Do not broaden to google.com
+net-google-003,google,Google,Gemini API,fqdn,generativelanguage.googleapis.com,generative_ai,api,https://ai.google.dev,2026-09-02,Do not broaden to googleapis.com
+net-microsoft-001,microsoft,Microsoft,Microsoft Copilot,fqdn,copilot.microsoft.com,generative_ai,web,https://copilot.microsoft.com,2026-09-02,Do not broaden to microsoft.com
+net-github-001,github,GitHub,GitHub Copilot,registered_domain,githubcopilot.com,code_assistant,web_api,https://github.com/features/copilot,2026-09-02,
+net-perplexity-001,perplexity,Perplexity,Perplexity,registered_domain,perplexity.ai,generative_ai,web_api,https://www.perplexity.ai,2026-09-02,
+net-huggingface-001,huggingface,Hugging Face,Hugging Face,registered_domain,huggingface.co,model_platform,web_api,https://huggingface.co,2026-09-02,
+net-mistral-001,mistral,Mistral AI,Le Chat and Mistral API,registered_domain,mistral.ai,generative_ai,web_api,https://mistral.ai,2026-09-02,
+net-cohere-001,cohere,Cohere,Cohere,registered_domain,cohere.com,model_provider,web_api,https://cohere.com,2026-09-02,
+net-cohere-002,cohere,Cohere,Cohere API,registered_domain,cohere.ai,model_provider,api,https://cohere.com,2026-09-02,
+net-deepseek-001,deepseek,DeepSeek,DeepSeek,registered_domain,deepseek.com,generative_ai,web_api,https://www.deepseek.com,2026-09-02,
+net-openrouter-001,openrouter,OpenRouter,OpenRouter,registered_domain,openrouter.ai,model_gateway,api,https://openrouter.ai,2026-09-02,
+net-groq-001,groq,Groq,GroqCloud,registered_domain,groq.com,model_provider,web_api,https://groq.com,2026-09-02,
+net-together-001,together,Together AI,Together AI,registered_domain,together.ai,model_provider,web_api,https://www.together.ai,2026-09-02,
+net-together-002,together,Together AI,Together API,registered_domain,together.xyz,model_provider,api,https://www.together.ai,2026-09-02,
+net-replicate-001,replicate,Replicate,Replicate,registered_domain,replicate.com,model_platform,web_api,https://replicate.com,2026-09-02,
+net-cursor-001,cursor,Anysphere,Cursor,registered_domain,cursor.com,code_assistant,web_api,https://www.cursor.com,2026-09-02,
+net-cursor-002,cursor,Anysphere,Cursor,registered_domain,cursor.sh,code_assistant,web_api,https://www.cursor.com,2026-09-02,Legacy and service endpoints may remain visible
+net-codeium-001,codeium,Codeium,Codeium,registered_domain,codeium.com,code_assistant,web_api,https://codeium.com,2026-09-02,
+net-windsurf-001,windsurf,Windsurf,Windsurf,registered_domain,windsurf.com,code_assistant,web_api,https://windsurf.com,2026-09-02,
+net-poe-001,poe,Quora,Poe,registered_domain,poe.com,generative_ai,web,https://poe.com,2026-09-02,
+net-character-001,characterai,Character.AI,Character.AI,registered_domain,character.ai,generative_ai,web,https://character.ai,2026-09-02,
+net-xai-001,xai,xAI,Grok and xAI API,registered_domain,x.ai,generative_ai,web_api,https://x.ai,2026-09-02,
+net-xai-002,xai,xAI,Grok,registered_domain,grok.com,generative_ai,web,https://grok.com,2026-09-02,
+net-meta-001,meta,Meta,Meta AI,registered_domain,meta.ai,generative_ai,web,https://www.meta.ai,2026-09-02,
+net-stability-001,stability,Stability AI,Stability AI,registered_domain,stability.ai,image_generation,web_api,https://stability.ai,2026-09-02,
+net-runway-001,runway,Runway,Runway,registered_domain,runwayml.com,video_generation,web_api,https://runwayml.com,2026-09-02,
+net-elevenlabs-001,elevenlabs,ElevenLabs,ElevenLabs,registered_domain,elevenlabs.io,audio_generation,web_api,https://elevenlabs.io,2026-09-02,
+net-midjourney-001,midjourney,Midjourney,Midjourney,registered_domain,midjourney.com,image_generation,web,https://www.midjourney.com,2026-09-02,
+net-ollama-001,ollama,Ollama,Ollama,registered_domain,ollama.com,local_model_tooling,web_api,https://ollama.com,2026-09-02,Local execution requires endpoint evidence
+net-lmstudio-001,lmstudio,LM Studio,LM Studio,registered_domain,lmstudio.ai,local_model_tooling,web_api,https://lmstudio.ai,2026-09-02,Local execution requires endpoint evidence
+

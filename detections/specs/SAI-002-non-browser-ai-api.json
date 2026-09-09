@@ -1,0 +1,20 @@
+{
+  "id": "SAI-002",
+  "title": "Non-browser process accesses an AI service",
+  "objective": "Discover scripts, command-line tools, desktop applications, services, and automation that communicate with cataloged AI providers.",
+  "status": "hunting",
+  "evidence_level": 2,
+  "confidence": "high",
+  "signal_families": ["endpoint", "network"],
+  "required_fields": ["timestamp", "destination_host", "process_name", "device_id"],
+  "limitations": [
+    "The initiating process may be a broker or helper process rather than the business application.",
+    "Network metadata does not reveal the records or content submitted to the provider.",
+    "Approved development tools can generate high event volume and require a client policy overlay."
+  ],
+  "platforms": ["microsoft-defender"],
+  "references": [
+    "https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-devicenetworkevents-table"
+  ]
+}
+

@@ -1,0 +1,66 @@
+{
+  "detection_count": 7,
+  "files": [
+    {
+      "path": "catalog/ai_domains.txt",
+      "sha256": "bce30fa375e510435785b46659a6536baf6f7c1254df133137ee2a498a1d09f0"
+    },
+    {
+      "path": "microsoft-defender/01-ai-domain-access.kql",
+      "sha256": "3c7013ee1345c716528413d4e589a7cf92ca78d64ff5ed00eebe2111205636d1"
+    },
+    {
+      "path": "microsoft-defender/02-non-browser-ai-api-access.kql",
+      "sha256": "ddcf922da729647d7e7991ba1d8f6608038cbce7bfc1d0563380b1b3017c9057"
+    },
+    {
+      "path": "microsoft-defender/03-local-ai-runtime-execution.kql",
+      "sha256": "48fa0615eddbdc4797b49c214fe78e6c175c91b12c758463ea3192d25b71f2a7"
+    },
+    {
+      "path": "microsoft-defender/04-model-weight-file-activity.kql",
+      "sha256": "a7e8fdff4f81d6822282d51be139d37fe3c704ca046baefdf4df7e4322a1840c"
+    },
+    {
+      "path": "microsoft-defender/05-mcp-process-activity.kql",
+      "sha256": "568c3984e6459a1f15d46713d05b02c8cf53d608f54d65a1cd1c41ce0da1c716"
+    },
+    {
+      "path": "microsoft-defender/06-mcp-config-file-activity.kql",
+      "sha256": "9c627ff5aab4a7314528a7ffb02dd52e186e3d142d10dee61ce1d22e6d49db41"
+    },
+    {
+      "path": "microsoft-defender/07-ai-browser-extension-inventory.kql",
+      "sha256": "f7f7d1cfe4b16fa24b081b2c08afb418e4c488a65b723a96ad251fd8461244d1"
+    },
+    {
+      "path": "microsoft-defender/08-ai-software-inventory.kql",
+      "sha256": "29f437c26dada5f8334cb12a3097ba5097974605e611065d88a00c67701ff103"
+    },
+    {
+      "path": "microsoft-defender/09-agent-governance-gaps.kql",
+      "sha256": "553a62177f6a2fc290c8360c8dde3e2a59c1ad7f452a678aae101d4c90101cbc"
+    },
+    {
+      "path": "microsoft-sentinel/01-asim-web-ai-access.kql",
+      "sha256": "f3adaf4a95e1a3a5be846f7636987e24392729bd5c02e4efba98e64d9df472f7"
+    },
+    {
+      "path": "microsoft-sentinel/02-asim-dns-ai-access.kql",
+      "sha256": "89b2c4a986eec93af351c2d97e7582070c005659d97b80e59921997c10dbb8f3"
+    },
+    {
+      "path": "rmm-macos-linux/shadow_ai_inventory.py",
+      "sha256": "63e27f59f4b222a336bacb6d26be7822fbba101b1c4473439a6b369e62d1340d"
+    },
+    {
+      "path": "rmm-windows/ShadowAIInventory.ps1",
+      "sha256": "f1de66b0a642282eba98287dd96f28a51544dfcb7a4525620202bed1639d88e4"
+    },
+    {
+      "path": "watchlists/shadow_ai_domains.csv",
+      "sha256": "a0f55634bb45f224fafff0cb42223ec963fd2a3e17af3c4a39e22a4704960c22"
+    }
+  ],
+  "generated_on": "2026-09-09"
+}

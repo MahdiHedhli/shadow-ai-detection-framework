@@ -1,0 +1,21 @@
+{
+  "id": "SAI-005",
+  "title": "Model Context Protocol activity observed",
+  "objective": "Discover MCP clients, servers, packages, and configuration artifacts that can connect AI systems to organizational tools and data.",
+  "status": "hunting",
+  "evidence_level": 2,
+  "confidence": "high",
+  "signal_families": ["endpoint", "mcp"],
+  "required_fields": ["timestamp", "device_id", "process_command_or_config_file"],
+  "limitations": [
+    "Configuration-file names can collide with unrelated software and require path validation.",
+    "Command lines may contain secrets and must be redacted before storage or display.",
+    "Local stdio MCP activity might not produce network telemetry."
+  ],
+  "platforms": ["microsoft-defender"],
+  "references": [
+    "https://modelcontextprotocol.io",
+    "https://learn.microsoft.com/en-us/azure/api-management/monitor-mcp-servers"
+  ]
+}
+

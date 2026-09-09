@@ -1,0 +1,20 @@
+{
+  "id": "SAI-006",
+  "title": "AI-related browser extension installed",
+  "objective": "Inventory browser extensions that provide AI capabilities or connect browser content to an AI service.",
+  "status": "hunting",
+  "evidence_level": 1,
+  "confidence": "low",
+  "signal_families": ["browser", "endpoint"],
+  "required_fields": ["device_id", "browser_name", "extension_id", "extension_name"],
+  "limitations": [
+    "Name and description matching is low confidence until an exact extension ID is cataloged.",
+    "The Defender browser-extension inventory is not natively ingested into Microsoft Sentinel.",
+    "An installed extension might be disabled or centrally approved."
+  ],
+  "platforms": ["microsoft-defender"],
+  "references": [
+    "https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-devicetvmbrowserextensions-table"
+  ]
+}
+

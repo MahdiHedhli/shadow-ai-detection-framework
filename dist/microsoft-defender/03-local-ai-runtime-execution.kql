@@ -1,0 +1,24 @@
+// SAI-003: Local AI runtime execution
+// Mode: Hunting. Runtime presence is not proof of sensitive-data use.
+// Table: DeviceProcessEvents
+let LocalAI_ProcessExact = dynamic(["jan", "llama-cli", "llama-server", "lm studio.exe", "ollama"]);
+let LocalAI_ProcessContains = dynamic(["gpt4all", "koboldcpp", "local-ai"]);
+let LocalAI_CommandPatterns = dynamic(["@modelcontextprotocol", "fastmcp", "mcp-server", "vllm.entrypoints"]);
+let Lookback = 30d;
+DeviceProcessEvents
+| where Timestamp > ago(Lookback)
+| where tolower(FileName) in (LocalAI_ProcessExact)
+    or FileName has_any (LocalAI_ProcessContains)
+    or ProcessCommandLine has_any (LocalAI_CommandPatterns)
+| extend User = iif(isnotempty(AccountUpn), AccountUpn, strcat(AccountDomain, "\\", AccountName))
+| extend RedactedCommand = replace_regex(ProcessCommandLine, @"(?i)(api[_-]?key|token|secret|password|bearer)(\s*[:=]\s*|\s+)[^\s;]+", @"\1=[REDACTED]")
+| summarize
+    RunCount = count(),
+    FirstSeen = min(Timestamp),
+    LastSeen = max(Timestamp),
+    Commands = make_set(RedactedCommand, 5),
+    Paths = make_set(FolderPath, 5),
+    Hashes = make_set(SHA1, 5)
+  by DeviceId, DeviceName, User, FileName
+| extend EvidenceLevel = 2, Confidence = "High", Disposition = "Unreviewed"
+| order by LastSeen desc
