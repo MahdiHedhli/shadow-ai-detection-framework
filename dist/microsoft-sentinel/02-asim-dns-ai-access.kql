@@ -1,0 +1,20 @@
+// SAI-001: Source-agnostic AI DNS discovery using Sentinel ASIM
+// Prerequisite: watchlist alias ShadowAIProviders, SearchKey = domain.
+let Lookback = 7d;
+let Catalog = materialize(
+    _GetWatchlist('ShadowAIProviders')
+    | project SearchKey=tolower(SearchKey), ProviderId, ProviderName, ProductName, Capability, Channel
+);
+let ShadowAI_Domains = toscalar(Catalog | summarize make_set(SearchKey));
+_Im_Dns(starttime=ago(Lookback), domain_has_any=ShadowAI_Domains)
+| extend Host = tolower(trim_end(@"\.$", DnsQuery))
+| extend DomainCandidates = ShadowAI_Domains
+| mv-apply MatchedDomain = DomainCandidates to typeof(string) on (
+    where Host == MatchedDomain or Host endswith strcat(".", MatchedDomain)
+)
+| lookup kind=leftouter Catalog on $left.MatchedDomain == $right.SearchKey
+| summarize Queries=count(), FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated), QueryTypes=make_set(DnsQueryTypeName, 5), Products=make_set(EventProduct, 5)
+  by SrcIpAddr, SrcHostname, SrcUsername, SrcProcessName, MatchedDomain, ProviderId, ProviderName, ProductName, Capability, Channel
+| extend EvidenceLevel=1, Confidence="Medium", Disposition="Unreviewed"
+| order by Queries desc
+

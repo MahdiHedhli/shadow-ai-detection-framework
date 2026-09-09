@@ -1,0 +1,5 @@
+extension_id,provider_id,browser,extension_name,source_url,last_validated,notes
+kbfnbcaeplbcioakkpcpgfkobkghlhen,grammarly,chromium-family,Grammarly AI Writing Assistant,https://chromewebstore.google.com/detail/grammarly-ai-writing-assi/kbfnbcaeplbcioakkpcpgfkobkghlhen,2026-09-02,Exact store ID; apply client approval policy after discovery
+camppjleccjaphfdbohjdohecfnoikec,merlin,chromium-family,Merlin AI,https://chromewebstore.google.com/detail/merlin-ai/camppjleccjaphfdbohjdohecfnoikec,2026-09-02,Exact store ID; extension can process webpage or document context
+difoiogjjojoaoomphldepapgpbgkhkb,sider,chromium-family,Sider AI,https://chromewebstore.google.com/detail/sider-chat-with-all-ai-gp/difoiogjjojoaoomphldepapgpbgkhkb,2026-09-02,Exact store ID; extension provides multiple model integrations
+iidnbdjijdkbmajdffnidomddglmieko,quillbot,chromium-family,QuillBot AI Writing Assistant,https://chromewebstore.google.com/detail/quillbot-ai-writing-assis/iidnbdjijdkbmajdffnidomddglmieko,2026-09-02,Exact store ID; apply client approval policy after discovery

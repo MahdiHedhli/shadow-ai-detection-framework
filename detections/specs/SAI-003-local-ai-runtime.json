@@ -1,0 +1,20 @@
+{
+  "id": "SAI-003",
+  "title": "Local AI runtime present or executed",
+  "objective": "Identify installed or running local model software that may not generate traffic to an external AI provider.",
+  "status": "hunting",
+  "evidence_level": 2,
+  "confidence": "high",
+  "signal_families": ["endpoint"],
+  "required_fields": ["device_id", "process_or_software_name", "timestamp_or_inventory_time"],
+  "limitations": [
+    "Runtime presence does not establish which data or model was used.",
+    "Software inventory availability varies by endpoint product and license.",
+    "Generic process names require signer, path, hash, or command-line validation."
+  ],
+  "platforms": ["microsoft-defender"],
+  "references": [
+    "https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-devicetvmsoftwareinventory-table"
+  ]
+}
+

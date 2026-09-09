@@ -1,0 +1,21 @@
+{
+  "id": "SAI-001",
+  "title": "AI service access observed",
+  "objective": "Identify managed users or devices that access a cataloged AI service through web, API, or DNS telemetry.",
+  "status": "hunting",
+  "evidence_level": 2,
+  "confidence": "medium",
+  "signal_families": ["network", "dns", "endpoint"],
+  "required_fields": ["timestamp", "destination_host", "source_device_or_ip"],
+  "limitations": [
+    "A connection or DNS lookup does not establish that organizational data was submitted.",
+    "Shared infrastructure and content-delivery hosts can create presence-only observations.",
+    "Unmanaged devices and encrypted DNS may not be visible to the available sensors."
+  ],
+  "platforms": ["microsoft-defender", "microsoft-sentinel-asim"],
+  "references": [
+    "https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-devicenetworkevents-table",
+    "https://learn.microsoft.com/en-us/azure/sentinel/normalization-schema-web"
+  ]
+}
+

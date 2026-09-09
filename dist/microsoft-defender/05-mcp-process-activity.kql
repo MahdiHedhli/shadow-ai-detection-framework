@@ -1,0 +1,22 @@
+// SAI-005: MCP-related process execution
+// Mode: Hunting. Command lines can contain secrets; project only a redacted command.
+// Table: DeviceProcessEvents
+let MCP_CommandPatterns = dynamic(["@modelcontextprotocol", "fastmcp", "mcp-server"]);
+let Lookback = 14d;
+let MCP_Runtimes = dynamic(["node.exe", "node", "npx.exe", "npx", "python.exe", "python3", "python", "uvx.exe", "uvx", "deno.exe", "deno", "bun.exe", "bun"]);
+DeviceProcessEvents
+| where Timestamp > ago(Lookback)
+| where tolower(FileName) in (MCP_Runtimes)
+| where ProcessCommandLine has_any (MCP_CommandPatterns)
+| extend RedactedCommand = replace_regex(ProcessCommandLine, @"(?i)(api[_-]?key|token|secret|password|bearer)(\s*[:=]\s*|\s+)[^\s;]+", @"\1=[REDACTED]")
+| extend User = iif(isnotempty(AccountUpn), AccountUpn, strcat(AccountDomain, "\\", AccountName))
+| summarize
+    RunCount = count(),
+    FirstSeen = min(Timestamp),
+    LastSeen = max(Timestamp),
+    Commands = make_set(RedactedCommand, 5),
+    ParentProcesses = make_set(InitiatingProcessFileName, 5)
+  by DeviceId, DeviceName, User, FileName, SHA1
+| extend EvidenceLevel = 2, Confidence = "High", Disposition = "Unreviewed"
+| order by LastSeen desc
+

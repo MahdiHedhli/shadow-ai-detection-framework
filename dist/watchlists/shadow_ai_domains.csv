@@ -1,0 +1,37 @@
+SearchKey,ProviderId,ProviderName,ProductName,Capability,Channel,IndicatorType,SourceUrl,LastValidated
+aistudio.google.com,google,Google,Google AI Studio,generative_ai,web,fqdn,https://aistudio.google.com,2026-09-02
+anthropic.com,anthropic,Anthropic,Claude API,generative_ai,web_api,registered_domain,https://www.anthropic.com,2026-09-02
+character.ai,characterai,Character.AI,Character.AI,generative_ai,web,registered_domain,https://character.ai,2026-09-02
+chatgpt.com,openai,OpenAI,ChatGPT,generative_ai,web,registered_domain,https://chatgpt.com,2026-09-02
+claude.ai,anthropic,Anthropic,Claude,generative_ai,web,registered_domain,https://claude.ai,2026-09-02
+codeium.com,codeium,Codeium,Codeium,code_assistant,web_api,registered_domain,https://codeium.com,2026-09-02
+cohere.ai,cohere,Cohere,Cohere API,model_provider,api,registered_domain,https://cohere.com,2026-09-02
+cohere.com,cohere,Cohere,Cohere,model_provider,web_api,registered_domain,https://cohere.com,2026-09-02
+copilot.microsoft.com,microsoft,Microsoft,Microsoft Copilot,generative_ai,web,fqdn,https://copilot.microsoft.com,2026-09-02
+cursor.com,cursor,Anysphere,Cursor,code_assistant,web_api,registered_domain,https://www.cursor.com,2026-09-02
+cursor.sh,cursor,Anysphere,Cursor,code_assistant,web_api,registered_domain,https://www.cursor.com,2026-09-02
+deepseek.com,deepseek,DeepSeek,DeepSeek,generative_ai,web_api,registered_domain,https://www.deepseek.com,2026-09-02
+elevenlabs.io,elevenlabs,ElevenLabs,ElevenLabs,audio_generation,web_api,registered_domain,https://elevenlabs.io,2026-09-02
+gemini.google.com,google,Google,Gemini,generative_ai,web,fqdn,https://gemini.google.com,2026-09-02
+generativelanguage.googleapis.com,google,Google,Gemini API,generative_ai,api,fqdn,https://ai.google.dev,2026-09-02
+githubcopilot.com,github,GitHub,GitHub Copilot,code_assistant,web_api,registered_domain,https://github.com/features/copilot,2026-09-02
+grok.com,xai,xAI,Grok,generative_ai,web,registered_domain,https://grok.com,2026-09-02
+groq.com,groq,Groq,GroqCloud,model_provider,web_api,registered_domain,https://groq.com,2026-09-02
+huggingface.co,huggingface,Hugging Face,Hugging Face,model_platform,web_api,registered_domain,https://huggingface.co,2026-09-02
+lmstudio.ai,lmstudio,LM Studio,LM Studio,local_model_tooling,web_api,registered_domain,https://lmstudio.ai,2026-09-02
+meta.ai,meta,Meta,Meta AI,generative_ai,web,registered_domain,https://www.meta.ai,2026-09-02
+midjourney.com,midjourney,Midjourney,Midjourney,image_generation,web,registered_domain,https://www.midjourney.com,2026-09-02
+mistral.ai,mistral,Mistral AI,Le Chat and Mistral API,generative_ai,web_api,registered_domain,https://mistral.ai,2026-09-02
+oaiusercontent.com,openai,OpenAI,OpenAI content delivery,generative_ai,web,registered_domain,https://openai.com,2026-09-02
+ollama.com,ollama,Ollama,Ollama,local_model_tooling,web_api,registered_domain,https://ollama.com,2026-09-02
+openai.com,openai,OpenAI,ChatGPT and OpenAI API,generative_ai,web_api,registered_domain,https://openai.com,2026-09-02
+openrouter.ai,openrouter,OpenRouter,OpenRouter,model_gateway,api,registered_domain,https://openrouter.ai,2026-09-02
+perplexity.ai,perplexity,Perplexity,Perplexity,generative_ai,web_api,registered_domain,https://www.perplexity.ai,2026-09-02
+poe.com,poe,Quora,Poe,generative_ai,web,registered_domain,https://poe.com,2026-09-02
+replicate.com,replicate,Replicate,Replicate,model_platform,web_api,registered_domain,https://replicate.com,2026-09-02
+runwayml.com,runway,Runway,Runway,video_generation,web_api,registered_domain,https://runwayml.com,2026-09-02
+stability.ai,stability,Stability AI,Stability AI,image_generation,web_api,registered_domain,https://stability.ai,2026-09-02
+together.ai,together,Together AI,Together AI,model_provider,web_api,registered_domain,https://www.together.ai,2026-09-02
+together.xyz,together,Together AI,Together API,model_provider,api,registered_domain,https://www.together.ai,2026-09-02
+windsurf.com,windsurf,Windsurf,Windsurf,code_assistant,web_api,registered_domain,https://windsurf.com,2026-09-02
+x.ai,xai,xAI,Grok and xAI API,generative_ai,web_api,registered_domain,https://x.ai,2026-09-02

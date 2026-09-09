@@ -1,0 +1,10 @@
+// SAI-003: Installed AI software inventory
+// Mode: Defender XDR hunting only. This TVM table is not ingested into Sentinel.
+// Table: DeviceTvmSoftwareInventory
+let AI_SoftwareTerms = dynamic(["ollama", "lm studio", "gpt4all", "jan", "cursor", "windsurf", "claude", "chatgpt"]);
+DeviceTvmSoftwareInventory
+| where SoftwareName has_any (AI_SoftwareTerms)
+| project DeviceId, DeviceName, OSPlatform, SoftwareVendor, SoftwareName, SoftwareVersion, EndOfSupportStatus, EndOfSupportDate
+| extend EvidenceLevel = 1, Confidence = "Medium", Disposition = "Unreviewed"
+| order by SoftwareName asc, DeviceName asc
+

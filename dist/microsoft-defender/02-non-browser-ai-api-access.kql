@@ -1,0 +1,66 @@
+// SAI-002: Non-browser process accessing an AI service
+// Mode: Hunting. Review automation, ownership, credentials, and data source before escalation.
+// Table: DeviceNetworkEvents
+let ShadowAI_Catalog = datatable(MatchedDomain:string, ProviderId:string, ProviderName:string, ProductName:string, Capability:string, Channel:string)[
+    "aistudio.google.com", "google", "Google", "Google AI Studio", "generative_ai", "web",
+    "anthropic.com", "anthropic", "Anthropic", "Claude API", "generative_ai", "web_api",
+    "character.ai", "characterai", "Character.AI", "Character.AI", "generative_ai", "web",
+    "chatgpt.com", "openai", "OpenAI", "ChatGPT", "generative_ai", "web",
+    "claude.ai", "anthropic", "Anthropic", "Claude", "generative_ai", "web",
+    "codeium.com", "codeium", "Codeium", "Codeium", "code_assistant", "web_api",
+    "cohere.ai", "cohere", "Cohere", "Cohere API", "model_provider", "api",
+    "cohere.com", "cohere", "Cohere", "Cohere", "model_provider", "web_api",
+    "copilot.microsoft.com", "microsoft", "Microsoft", "Microsoft Copilot", "generative_ai", "web",
+    "cursor.com", "cursor", "Anysphere", "Cursor", "code_assistant", "web_api",
+    "cursor.sh", "cursor", "Anysphere", "Cursor", "code_assistant", "web_api",
+    "deepseek.com", "deepseek", "DeepSeek", "DeepSeek", "generative_ai", "web_api",
+    "elevenlabs.io", "elevenlabs", "ElevenLabs", "ElevenLabs", "audio_generation", "web_api",
+    "gemini.google.com", "google", "Google", "Gemini", "generative_ai", "web",
+    "generativelanguage.googleapis.com", "google", "Google", "Gemini API", "generative_ai", "api",
+    "githubcopilot.com", "github", "GitHub", "GitHub Copilot", "code_assistant", "web_api",
+    "grok.com", "xai", "xAI", "Grok", "generative_ai", "web",
+    "groq.com", "groq", "Groq", "GroqCloud", "model_provider", "web_api",
+    "huggingface.co", "huggingface", "Hugging Face", "Hugging Face", "model_platform", "web_api",
+    "lmstudio.ai", "lmstudio", "LM Studio", "LM Studio", "local_model_tooling", "web_api",
+    "meta.ai", "meta", "Meta", "Meta AI", "generative_ai", "web",
+    "midjourney.com", "midjourney", "Midjourney", "Midjourney", "image_generation", "web",
+    "mistral.ai", "mistral", "Mistral AI", "Le Chat and Mistral API", "generative_ai", "web_api",
+    "oaiusercontent.com", "openai", "OpenAI", "OpenAI content delivery", "generative_ai", "web",
+    "ollama.com", "ollama", "Ollama", "Ollama", "local_model_tooling", "web_api",
+    "openai.com", "openai", "OpenAI", "ChatGPT and OpenAI API", "generative_ai", "web_api",
+    "openrouter.ai", "openrouter", "OpenRouter", "OpenRouter", "model_gateway", "api",
+    "perplexity.ai", "perplexity", "Perplexity", "Perplexity", "generative_ai", "web_api",
+    "poe.com", "poe", "Quora", "Poe", "generative_ai", "web",
+    "replicate.com", "replicate", "Replicate", "Replicate", "model_platform", "web_api",
+    "runwayml.com", "runway", "Runway", "Runway", "video_generation", "web_api",
+    "stability.ai", "stability", "Stability AI", "Stability AI", "image_generation", "web_api",
+    "together.ai", "together", "Together AI", "Together AI", "model_provider", "web_api",
+    "together.xyz", "together", "Together AI", "Together API", "model_provider", "api",
+    "windsurf.com", "windsurf", "Windsurf", "Windsurf", "code_assistant", "web_api",
+    "x.ai", "xai", "xAI", "Grok and xAI API", "generative_ai", "web_api"
+];
+let ShadowAI_Domains = dynamic(["aistudio.google.com", "anthropic.com", "character.ai", "chatgpt.com", "claude.ai", "codeium.com", "cohere.ai", "cohere.com", "copilot.microsoft.com", "cursor.com", "cursor.sh", "deepseek.com", "elevenlabs.io", "gemini.google.com", "generativelanguage.googleapis.com", "githubcopilot.com", "grok.com", "groq.com", "huggingface.co", "lmstudio.ai", "meta.ai", "midjourney.com", "mistral.ai", "oaiusercontent.com", "ollama.com", "openai.com", "openrouter.ai", "perplexity.ai", "poe.com", "replicate.com", "runwayml.com", "stability.ai", "together.ai", "together.xyz", "windsurf.com", "x.ai"]);
+let Lookback = 7d;
+let CommonBrowsers = dynamic(["chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe", "safari", "chrome", "firefox", "msedge"]);
+DeviceNetworkEvents
+| where Timestamp > ago(Lookback)
+| where isnotempty(RemoteUrl) and RemoteUrl has_any (ShadowAI_Domains)
+| where tolower(InitiatingProcessFileName) !in (CommonBrowsers)
+| extend NormalizedUrl = iif(RemoteUrl matches regex @"^[A-Za-z][A-Za-z0-9+.-]*://", RemoteUrl, strcat("https://", RemoteUrl))
+| extend Host = tolower(trim_end(@"\.$", tostring(parse_url(NormalizedUrl).Host)))
+| extend DomainCandidates = ShadowAI_Domains
+| mv-apply MatchedDomain = DomainCandidates to typeof(string) on (
+    where Host == MatchedDomain or Host endswith strcat(".", MatchedDomain)
+)
+| lookup kind=leftouter ShadowAI_Catalog on MatchedDomain
+| extend User = iif(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, strcat(InitiatingProcessAccountDomain, "\\", InitiatingProcessAccountName))
+| extend RedactedCommand = replace_regex(InitiatingProcessCommandLine, @"(?i)(api[_-]?key|token|secret|password|bearer)(\s*[:=]\s*|\s+)[^\s;]+", @"\1=[REDACTED]")
+| summarize
+    Connections = count(),
+    FirstSeen = min(Timestamp),
+    LastSeen = max(Timestamp),
+    SampleCommands = make_set(RedactedCommand, 5),
+    SampleUrls = make_set(RemoteUrl, 5)
+  by DeviceId, DeviceName, User, InitiatingProcessFileName, InitiatingProcessSHA1, MatchedDomain, ProviderId, ProviderName, ProductName, Capability
+| extend EvidenceLevel = 2, Confidence = "High", Disposition = "Unreviewed"
+| order by Connections desc

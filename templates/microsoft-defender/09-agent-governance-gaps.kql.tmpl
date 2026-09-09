@@ -1,0 +1,18 @@
+// SAI-007: Active AI agents with governance gaps
+// Mode: Hunting. Requires AgentsInfo availability and applicable licensing/connectors.
+// Table: AgentsInfo
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus =~ "Active"
+| extend OwnersText = tostring(Owners), PermissionsText = tostring(Permissions), GuardrailsText = tostring(Guardrails), EndpointsText = tostring(Endpoints)
+| extend MissingOwner = isempty(OwnersText) or OwnersText in ("[]", "null"),
+         MissingGuardrails = isempty(GuardrailsText) or GuardrailsText in ("[]", "null"),
+         HasPermissions = isnotempty(PermissionsText) and PermissionsText !in ("[]", "null"),
+         HasExternalEndpoints = EndpointsText has_cs '"externalConnectivity":true' or EndpointsText has_cs '"externalConnectivity": true'
+| where MissingOwner or MissingGuardrails or HasExternalEndpoints
+| extend ToolCount = coalesce(array_length(DeclaredTools), 0),
+         DataSourceCount = coalesce(array_length(DeclaredDataSources), 0),
+         McpServerCount = coalesce(array_length(McpServers), 0)
+| project Timestamp, AgentId, AgentName, Platform, PublishedStatus, LifecycleStatus, Availability, Model, ToolCount, DataSourceCount, McpServerCount, MissingOwner, MissingGuardrails, HasPermissions, HasExternalEndpoints
+| extend EvidenceLevel = 3, Confidence = "High", Disposition = "Unreviewed"
+| order by HasExternalEndpoints desc, MissingOwner desc

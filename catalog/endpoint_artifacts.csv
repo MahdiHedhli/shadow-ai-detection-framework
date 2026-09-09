@@ -1,0 +1,22 @@
+artifact_id,provider_id,artifact_type,platform,pattern,match_mode,capability,confidence,source_url,last_validated,notes
+proc-ollama-001,ollama,process,any,ollama,exact,local_model_runtime,high,https://ollama.com,2026-09-02,
+proc-lmstudio-001,lmstudio,process,windows,LM Studio.exe,exact,local_model_runtime,high,https://lmstudio.ai,2026-09-02,
+proc-gpt4all-001,gpt4all,process,any,gpt4all,contains,local_model_runtime,medium,https://www.nomic.ai/gpt4all,2026-09-02,Validate signer and path during triage
+proc-jan-001,jan,process,any,jan,exact,local_model_runtime,medium,https://jan.ai,2026-09-02,Short process name can collide; require secondary evidence
+proc-llamacpp-001,llamacpp,process,any,llama-server,exact,local_model_runtime,high,https://github.com/ggml-org/llama.cpp,2026-09-02,
+proc-llamacpp-002,llamacpp,process,any,llama-cli,exact,local_model_runtime,high,https://github.com/ggml-org/llama.cpp,2026-09-02,
+proc-vllm-001,vllm,command_line,any,vllm.entrypoints,contains,local_model_runtime,high,https://github.com/vllm-project/vllm,2026-09-02,
+proc-localai-001,localai,process,any,local-ai,contains,local_model_runtime,medium,https://github.com/mudler/LocalAI,2026-09-02,Validate path and command line
+proc-kobold-001,koboldcpp,process,any,koboldcpp,contains,local_model_runtime,high,https://github.com/LostRuins/koboldcpp,2026-09-02,
+file-model-001,generic,model_file,any,.gguf,suffix,model_weight,high,https://github.com/ggerganov/ggml,2026-09-02,
+file-model-002,generic,model_file,any,.ggml,suffix,model_weight,high,https://github.com/ggerganov/ggml,2026-09-02,
+file-mcp-001,mcp,config_file,any,mcp.json,exact,mcp_configuration,medium,https://modelcontextprotocol.io,2026-09-02,Correlate path or process to reduce false positives
+file-mcp-002,mcp,config_file,any,claude_desktop_config.json,exact,mcp_configuration,high,https://modelcontextprotocol.io,2026-09-02,
+file-mcp-003,mcp,config_file,any,.mcp.json,exact,mcp_configuration,medium,https://modelcontextprotocol.io,2026-09-02,
+cmd-mcp-001,mcp,command_line,any,@modelcontextprotocol,contains,mcp_server,high,https://modelcontextprotocol.io,2026-09-02,
+cmd-mcp-002,mcp,command_line,any,mcp-server,contains,mcp_server,medium,https://modelcontextprotocol.io,2026-09-02,
+cmd-mcp-003,mcp,command_line,any,fastmcp,contains,mcp_server,high,https://github.com/jlowin/fastmcp,2026-09-02,
+env-openai-001,openai,environment_variable_name,any,OPENAI_API_KEY,exact,api_credential_name,medium,https://platform.openai.com/docs,2026-09-02,Never collect or report the value
+env-anthropic-001,anthropic,environment_variable_name,any,ANTHROPIC_API_KEY,exact,api_credential_name,medium,https://docs.anthropic.com,2026-09-02,Never collect or report the value
+env-google-001,google,environment_variable_name,any,GOOGLE_API_KEY,exact,api_credential_name,low,https://ai.google.dev,2026-09-02,Not AI-specific without additional context; never collect value
+

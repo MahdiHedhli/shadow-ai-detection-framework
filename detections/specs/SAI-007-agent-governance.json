@@ -1,0 +1,20 @@
+{
+  "id": "SAI-007",
+  "title": "Active AI agent has governance gaps",
+  "objective": "Identify active AI agents that lack ownership or guardrails, expose external endpoints, or require permission review.",
+  "status": "hunting",
+  "evidence_level": 3,
+  "confidence": "high",
+  "signal_families": ["agent", "identity", "oauth", "mcp"],
+  "required_fields": ["agent_id", "lifecycle_status", "owners", "permissions", "endpoints"],
+  "limitations": [
+    "AgentsInfo availability depends on Microsoft licensing and connected platforms.",
+    "Dynamic provider metadata can change shape and must be tested against each tenant.",
+    "A missing metadata field can indicate collection coverage rather than an actual governance failure."
+  ],
+  "platforms": ["microsoft-defender"],
+  "references": [
+    "https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-agentsinfo-table"
+  ]
+}
+

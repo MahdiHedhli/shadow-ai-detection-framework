@@ -1,0 +1,20 @@
+// SAI-004: Local model-weight file creation or modification
+// Mode: Hunting. Does not rely on unsupported file-read actions.
+// Table: DeviceFileEvents
+let Lookback = 30d;
+DeviceFileEvents
+| where Timestamp > ago(Lookback)
+| where ActionType in~ ("FileCreated", "FileModified", "FileRenamed")
+| where tolower(FileName) endswith ".gguf" or tolower(FileName) endswith ".ggml"
+| extend User = iif(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, strcat(InitiatingProcessAccountDomain, "\\", InitiatingProcessAccountName))
+| summarize
+    FileEvents = count(),
+    TotalObservedBytes = sum(FileSize),
+    FirstSeen = min(Timestamp),
+    LastSeen = max(Timestamp),
+    Files = make_set(strcat(FolderPath, "\\", FileName), 10),
+    Processes = make_set(InitiatingProcessFileName, 10)
+  by DeviceId, DeviceName, User
+| extend EvidenceLevel = 1, Confidence = "High", Disposition = "Unreviewed"
+| order by TotalObservedBytes desc
+

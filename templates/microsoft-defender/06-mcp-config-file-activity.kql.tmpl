@@ -1,0 +1,20 @@
+// SAI-005: MCP configuration file activity
+// Mode: Hunting. File names alone may collide; validate path and associated process.
+// Table: DeviceFileEvents
+{{MCP_CONFIG_KQL}}
+let Lookback = 30d;
+DeviceFileEvents
+| where Timestamp > ago(Lookback)
+| where ActionType in~ ("FileCreated", "FileModified", "FileRenamed")
+| where FileName in~ (MCP_ConfigFiles)
+| extend User = iif(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, strcat(InitiatingProcessAccountDomain, "\\", InitiatingProcessAccountName))
+| summarize
+    FileEvents = count(),
+    FirstSeen = min(Timestamp),
+    LastSeen = max(Timestamp),
+    Paths = make_set(FolderPath, 10),
+    Processes = make_set(InitiatingProcessFileName, 10)
+  by DeviceId, DeviceName, User, FileName
+| extend EvidenceLevel = 1, Confidence = "Medium", Disposition = "Unreviewed"
+| order by LastSeen desc
+
