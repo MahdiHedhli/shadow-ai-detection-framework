@@ -43,6 +43,9 @@ class RepositoryTests(unittest.TestCase):
         self.assertGreaterEqual(len(artifacts), 15)
         self.assertGreaterEqual(len(browser_extensions), 4)
         self.assertGreaterEqual(len(browser_extension_names), 25)
+        extension_ids = {row["extension_id"]: row for row in browser_extensions}
+        self.assertEqual(extension_ids["fcoeoabgfenejglbffodgkkbkcdhcgfn"]["provider_id"], "anthropic")
+        self.assertEqual(extension_ids["ejcfepkfckglbgocfkanmcdngdijcgld"]["provider_id"], "openai")
 
     def test_browser_extension_name_patterns_are_specific(self) -> None:
         rows = build.read_csv(
