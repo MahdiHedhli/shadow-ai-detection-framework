@@ -134,6 +134,18 @@ class RepositoryTests(unittest.TestCase):
             for value in forbidden:
                 self.assertNotIn(value, content, f"{path} contains unsafe primitive {value}")
 
+    def test_windows_software_inventory_tolerates_sparse_registry_entries(self) -> None:
+        paths = [
+            ROOT / "templates" / "rmm-windows" / "ShadowAIInventory.ps1.tmpl",
+            ROOT / "dist" / "rmm-windows" / "ShadowAIInventory.ps1",
+        ]
+        for path in paths:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("PSObject.Properties['DisplayName']", content, str(path))
+            self.assertIn("PSObject.Properties['DisplayVersion']", content, str(path))
+            self.assertNotIn("$software.DisplayName", content, str(path))
+            self.assertNotIn("$software.DisplayVersion", content, str(path))
+
     def test_sensitive_observation_key_is_rejected(self) -> None:
         collector = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"
         result = subprocess.run(
