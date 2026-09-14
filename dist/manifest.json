@@ -55,7 +55,7 @@
     },
     {
       "path": "rmm-windows/ShadowAIInventory.ps1",
-      "sha256": "c78fce1295722c63db95757fe62178b51b9e19f4f08158e8cef91114d07d2260"
+      "sha256": "d85766f7cca51763ffbc5b676547e0ee256aa0170ea92925c002f3ec0698b134"
     },
     {
       "path": "watchlists/shadow_ai_domains.csv",

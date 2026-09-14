@@ -165,8 +165,20 @@ class RepositoryTests(unittest.TestCase):
         ]
         for path in paths:
             content = path.read_text(encoding="utf-8")
-            self.assertIn("[AllowEmptyCollection()][object[]]$Profiles", content, str(path))
+            self.assertEqual(content.count("[AllowEmptyCollection()][object[]]$Profiles"), 6, str(path))
             self.assertIn("profile_inventory_empty", content, str(path))
+
+    def test_windows_fatal_diagnostics_are_bounded_and_content_free(self) -> None:
+        paths = [
+            ROOT / "templates" / "rmm-windows" / "ShadowAIInventory.ps1.tmpl",
+            ROOT / "dist" / "rmm-windows" / "ShadowAIInventory.ps1",
+        ]
+        for path in paths:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("error_id = [string]$fatalRecord.FullyQualifiedErrorId", content, str(path))
+            self.assertIn("parameter = $fatalParameter", content, str(path))
+            self.assertIn("line = [int]$fatalRecord.InvocationInfo.ScriptLineNumber", content, str(path))
+            self.assertNotIn("$fatalRecord.Exception.Message", content, str(path))
 
     def test_collectors_cover_all_local_profiles_without_emitting_raw_history(self) -> None:
         windows_paths = [
