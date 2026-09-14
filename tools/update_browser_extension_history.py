@@ -168,7 +168,6 @@ def update_inventory(
             candidates.append(candidate)
             candidate_ids.add(candidate["extension_id"])
             new_candidates += 1
-    history.sort(key=lambda row: (row["observed_on"], row["provider_id"], row["extension_id"]))
     candidates.sort(key=lambda row: (row["discovered_on"], row["provider_id"], row["extension_id"]))
     write_rows(HISTORY_PATH, HISTORY_FIELDS, history)
     write_rows(CANDIDATE_PATH, CANDIDATE_FIELDS, candidates)
