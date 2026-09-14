@@ -25,12 +25,13 @@ from urllib.parse import urlsplit
 
 
 COLLECTOR_NAME = "shadow-ai-rmm-macos-linux"
-COLLECTOR_VERSION = "0.3.0"
+COLLECTOR_VERSION = "0.4.0"
 MAX_FINDINGS = 5000
 MAX_HOMES = 256
 MAX_PROCESS_BYTES = 65536
 MAX_HISTORY_BYTES_PER_PROFILE = 268435456
 MAX_HISTORY_ROWS_PER_PROFILE = 1000000
+MAX_MANIFEST_BYTES = 1048576
 EXTENSION_ID_RE = re.compile(r"^[a-p]{32}$")
 CATALOG = [
   {
@@ -258,6 +259,158 @@ BROWSER_EXTENSION_CATALOG = [
     "extension_id": "kbfnbcaeplbcioakkpcpgfkobkghlhen",
     "extension_name": "Grammarly AI Writing Assistant",
     "provider_id": "grammarly"
+  }
+]
+BROWSER_EXTENSION_NAME_CATALOG = [
+  {
+    "confidence": "medium",
+    "pattern": "Microsoft Copilot",
+    "provider_id": "microsoft"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "GitHub Copilot",
+    "provider_id": "github"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Character.AI",
+    "provider_id": "characterai"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Blackbox AI",
+    "provider_id": "blackbox"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Compose AI",
+    "provider_id": "compose-ai"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Perplexity",
+    "provider_id": "perplexity"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Writesonic",
+    "provider_id": "writesonic"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "ChatSonic",
+    "provider_id": "writesonic"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Consensus",
+    "provider_id": "consensus"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Grammarly",
+    "provider_id": "grammarly"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Amazon Q",
+    "provider_id": "amazon"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "DeepSeek",
+    "provider_id": "deepseek"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "QuillBot",
+    "provider_id": "quillbot"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "SciSpace",
+    "provider_id": "scispace"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Windsurf",
+    "provider_id": "windsurf"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "ChatGPT",
+    "provider_id": "openai"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Codeium",
+    "provider_id": "codeium"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Mistral",
+    "provider_id": "mistral"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Tabnine",
+    "provider_id": "tabnine"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Claude",
+    "provider_id": "anthropic"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Gemini",
+    "provider_id": "google"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Jasper",
+    "provider_id": "jasper"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Merlin",
+    "provider_id": "merlin"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Monica",
+    "provider_id": "monica"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "OpenAI",
+    "provider_id": "openai"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "HARPA",
+    "provider_id": "harpa"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "MaxAI",
+    "provider_id": "maxai"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Phind",
+    "provider_id": "phind"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Sider",
+    "provider_id": "sider"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Grok",
+    "provider_id": "xai"
   }
 ]
 DOMAIN_CATALOG = [
@@ -772,6 +925,63 @@ def collect_known_paths(document: dict[str, object], homes: list[tuple[str, Path
             add_finding(document, "software", indicator, None, location=tokenize_path(path, None), presence_only=True)
 
 
+def read_bounded_json(path: Path) -> object | None:
+    try:
+        if not safe_exists(path) or not path.is_file() or path.stat().st_size > MAX_MANIFEST_BYTES:
+            return None
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+
+
+def safe_extension_name(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    name = value.strip()
+    if not name or len(name) > 200 or any(ord(character) < 32 or ord(character) == 127 for character in name):
+        return None
+    return name
+
+
+def resolve_chromium_extension_name(extension: Path) -> str | None:
+    try:
+        versions = [item for item in extension.iterdir() if safe_exists(item) and item.is_dir()]
+    except OSError:
+        return None
+    for version in sorted(versions, key=lambda item: item.name, reverse=True)[:8]:
+        manifest = read_bounded_json(version / "manifest.json")
+        if not isinstance(manifest, dict):
+            continue
+        name = safe_extension_name(manifest.get("name"))
+        if name is None:
+            continue
+        message_match = re.fullmatch(r"__MSG_([A-Za-z0-9_@]+)__", name)
+        if message_match:
+            locale = safe_extension_name(manifest.get("default_locale"))
+            if locale is None or not re.fullmatch(r"[A-Za-z0-9_-]{2,20}", locale):
+                continue
+            messages = read_bounded_json(version / "_locales" / locale / "messages.json")
+            if not isinstance(messages, dict):
+                continue
+            message = messages.get(message_match.group(1))
+            if not isinstance(message, dict):
+                continue
+            name = safe_extension_name(message.get("message"))
+        if name is not None:
+            return name
+    return None
+
+
+def extension_name_classification(extension_name: str | None) -> dict[str, str] | None:
+    if extension_name is None:
+        return None
+    folded = extension_name.casefold()
+    return next(
+        (item for item in BROWSER_EXTENSION_NAME_CATALOG if item["pattern"].casefold() in folded),
+        None,
+    )
+
+
 def collect_browser_extensions(document: dict[str, object], homes: list[tuple[str, Path]]) -> None:
     known_extensions = {item["extension_id"]: item for item in BROWSER_EXTENSION_CATALOG}
     roots_by_family = {
@@ -801,17 +1011,32 @@ def collect_browser_extensions(document: dict[str, object], homes: list[tuple[st
                     for extension in sorted(extension_root.iterdir(), key=lambda item: item.name)[:1000]:
                         catalog_item = known_extensions.get(extension.name)
                         if (
-                            catalog_item
-                            and catalog_item["browser"] in {browser, "chromium-family"}
-                            and EXTENSION_ID_RE.fullmatch(extension.name)
+                            EXTENSION_ID_RE.fullmatch(extension.name)
                             and safe_exists(extension)
                             and extension.is_dir()
                         ):
+                            extension_name: str | None = None
+                            provider_id: str | None = None
+                            confidence = "medium"
+                            classification_basis = "manifest_name_local_only"
+                            if catalog_item and catalog_item["browser"] in {browser, "chromium-family"}:
+                                extension_name = catalog_item["extension_name"]
+                                provider_id = catalog_item["provider_id"]
+                                confidence = "high"
+                                classification_basis = "catalog_id"
+                            else:
+                                extension_name = resolve_chromium_extension_name(extension)
+                                classification = extension_name_classification(extension_name)
+                                if classification:
+                                    provider_id = classification["provider_id"]
+                                    confidence = classification["confidence"]
+                            if provider_id is None or extension_name is None:
+                                continue
                             indicator = synthetic(
                                 "browser-" + extension.name,
-                                catalog_item["provider_id"],
+                                provider_id,
                                 "ai_browser_extension",
-                                "high",
+                                confidence,
                             )
                             add_finding(
                                 document,
@@ -821,7 +1046,9 @@ def collect_browser_extensions(document: dict[str, object], homes: list[tuple[st
                                 browser=browser,
                                 profile=profile.name,
                                 extension_id=extension.name,
-                                extension_name=catalog_item["extension_name"],
+                                extension_name=extension_name,
+                                classification_basis=classification_basis,
+                                presence_only=True,
                             )
             except OSError as exc:
                 record_error(document, f"browser_inventory_{browser}", exc)

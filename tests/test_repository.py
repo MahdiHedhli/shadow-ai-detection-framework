@@ -32,12 +32,25 @@ class RepositoryTests(unittest.TestCase):
         browser_extensions = build.read_csv(
             ROOT / "catalog" / "browser_extensions.csv", build.BROWSER_EXTENSION_REQUIRED
         )
+        browser_extension_names = build.read_csv(
+            ROOT / "catalog" / "browser_extension_name_patterns.csv", build.BROWSER_EXTENSION_NAME_REQUIRED
+        )
         build.validate_domains(domains)
         build.validate_artifacts(artifacts)
         build.validate_browser_extensions(browser_extensions)
+        build.validate_browser_extension_names(browser_extension_names)
         self.assertGreaterEqual(len(domains), 25)
         self.assertGreaterEqual(len(artifacts), 15)
         self.assertGreaterEqual(len(browser_extensions), 4)
+        self.assertGreaterEqual(len(browser_extension_names), 25)
+
+    def test_browser_extension_name_patterns_are_specific(self) -> None:
+        rows = build.read_csv(
+            ROOT / "catalog" / "browser_extension_name_patterns.csv", build.BROWSER_EXTENSION_NAME_REQUIRED
+        )
+        self.assertNotIn("ai", {row["pattern"].casefold() for row in rows})
+        with self.assertRaises(build.ValidationError):
+            build.validate_browser_extension_names([rows[0], dict(rows[0])])
 
     def test_detection_specs_validate(self) -> None:
         specs = build.validate_specs()
@@ -212,6 +225,48 @@ class RepositoryTests(unittest.TestCase):
             self.assertIn("matched_domain", content, str(path))
             self.assertNotIn("raw_url =", content, str(path))
             self.assertNotIn("page_title =", content, str(path))
+
+    def test_collectors_classify_extension_manifests_locally(self) -> None:
+        paths = [
+            ROOT / "templates" / "rmm-macos-linux" / "shadow_ai_inventory.py.tmpl",
+            ROOT / "templates" / "rmm-windows" / "ShadowAIInventory.ps1.tmpl",
+        ]
+        for path in paths:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("BROWSER_EXTENSION_NAME_CATALOG_JSON", content, str(path))
+            self.assertIn("manifest_name_local_only", content, str(path))
+            normalized = content.casefold().replace("_", "")
+            self.assertIn("maxmanifest", normalized, str(path))
+            self.assertNotIn("extension_description", content, str(path))
+            self.assertNotIn("extension_permissions", content, str(path))
+
+    def test_python_extension_manifest_name_classification(self) -> None:
+        collector = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"
+        spec = importlib.util.spec_from_file_location("shadow_ai_extension_collector", collector)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            literal_version = root / "literal" / "1.0.0"
+            literal_version.mkdir(parents=True)
+            (literal_version / "manifest.json").write_text('{"name":"Claude in the browser"}', encoding="utf-8")
+            self.assertEqual(module.resolve_chromium_extension_name(root / "literal"), "Claude in the browser")
+            self.assertEqual(
+                module.extension_name_classification("Claude in the browser")["provider_id"], "anthropic"
+            )
+
+            localized_version = root / "localized" / "2.0.0"
+            locale = localized_version / "_locales" / "en"
+            locale.mkdir(parents=True)
+            (localized_version / "manifest.json").write_text(
+                '{"name":"__MSG_appName__","default_locale":"en"}', encoding="utf-8"
+            )
+            (locale / "messages.json").write_text(
+                '{"appName":{"message":"Perplexity Assistant"}}', encoding="utf-8"
+            )
+            self.assertEqual(module.resolve_chromium_extension_name(root / "localized"), "Perplexity Assistant")
+            self.assertIsNone(module.extension_name_classification("Ordinary bookmark helper"))
 
     def test_python_history_matching_respects_hostname_boundaries(self) -> None:
         collector = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"

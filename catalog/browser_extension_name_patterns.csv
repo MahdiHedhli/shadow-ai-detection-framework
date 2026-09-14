@@ -1,0 +1,31 @@
+pattern,provider_id,confidence,source_url,last_validated,notes
+Claude,anthropic,medium,https://claude.ai,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+ChatGPT,openai,medium,https://chatgpt.com,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+OpenAI,openai,medium,https://openai.com,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+GitHub Copilot,github,medium,https://github.com/features/copilot,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Microsoft Copilot,microsoft,medium,https://copilot.microsoft.com,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Gemini,google,medium,https://gemini.google.com,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Perplexity,perplexity,medium,https://www.perplexity.ai,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+DeepSeek,deepseek,medium,https://www.deepseek.com,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Character.AI,characterai,medium,https://character.ai,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Mistral,mistral,medium,https://mistral.ai,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Grok,xai,medium,https://grok.com,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Sider,sider,medium,https://sider.ai,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Merlin,merlin,medium,https://www.getmerlin.in,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+QuillBot,quillbot,medium,https://quillbot.com,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Grammarly,grammarly,medium,https://www.grammarly.com,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Monica,monica,medium,https://monica.im,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+MaxAI,maxai,medium,https://www.maxai.me,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+HARPA,harpa,medium,https://harpa.ai,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Compose AI,compose-ai,medium,https://www.compose.ai,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Jasper,jasper,medium,https://www.jasper.ai,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Writesonic,writesonic,medium,https://writesonic.com,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+ChatSonic,writesonic,medium,https://writesonic.com/chat,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+SciSpace,scispace,medium,https://scispace.com,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Consensus,consensus,medium,https://consensus.app,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Codeium,codeium,medium,https://codeium.com,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Windsurf,windsurf,medium,https://windsurf.com,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Amazon Q,amazon,medium,https://aws.amazon.com/q,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Tabnine,tabnine,medium,https://www.tabnine.com,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Blackbox AI,blackbox,medium,https://www.blackbox.ai,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
+Phind,phind,medium,https://www.phind.com,2026-09-14,Manifest-name fallback; exact extension IDs remain high confidence
