@@ -51,11 +51,11 @@
     },
     {
       "path": "rmm-macos-linux/shadow_ai_inventory.py",
-      "sha256": "63e27f59f4b222a336bacb6d26be7822fbba101b1c4473439a6b369e62d1340d"
+      "sha256": "a97758bb16f0bc0535f6695667dbdb9bf474cfcb6184a74e1e9d1d19513ea7da"
     },
     {
       "path": "rmm-windows/ShadowAIInventory.ps1",
-      "sha256": "66ee2f52f327505b918626da0bae579a067848305673094b442bbf14a92c61fb"
+      "sha256": "b2dab2d7d8629a6a15189cc99f9dff9400c1b8b2c7234b1c1c4467c4f8761b6c"
     },
     {
       "path": "watchlists/shadow_ai_domains.csv",

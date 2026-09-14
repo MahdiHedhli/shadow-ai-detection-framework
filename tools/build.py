@@ -284,6 +284,17 @@ def build_tokens(
         }
         for row in sorted(browser_extensions, key=lambda item: item["extension_id"])
     ]
+    domain_collector_catalog = [
+        {
+            "artifact_id": row["indicator_id"],
+            "provider_id": row["provider_id"],
+            "capability": row["capability"],
+            "confidence": "low",
+            "domain": row["indicator"],
+            "indicator_type": row["indicator_type"],
+        }
+        for row in sorted(domains, key=lambda item: item["indicator_id"])
+    ]
     return {
         "{{AI_CATALOG_KQL}}": catalog_kql,
         "{{AI_DOMAIN_ARRAY_KQL}}": kql_dynamic("ShadowAI_Domains", domain_values),
@@ -303,6 +314,7 @@ def build_tokens(
         ),
         "{{ENDPOINT_CATALOG_JSON}}": json.dumps(collector_catalog, indent=2, sort_keys=True),
         "{{BROWSER_EXTENSION_CATALOG_JSON}}": json.dumps(browser_catalog, indent=2, sort_keys=True),
+        "{{DOMAIN_CATALOG_JSON}}": json.dumps(domain_collector_catalog, indent=2, sort_keys=True),
     }
 
 

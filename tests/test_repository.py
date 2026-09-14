@@ -141,10 +141,48 @@ class RepositoryTests(unittest.TestCase):
         ]
         for path in paths:
             content = path.read_text(encoding="utf-8")
-            self.assertIn("PSObject.Properties['DisplayName']", content, str(path))
-            self.assertIn("PSObject.Properties['DisplayVersion']", content, str(path))
+            self.assertIn("PSObject.Properties[$Name]", content, str(path))
             self.assertNotIn("$software.DisplayName", content, str(path))
             self.assertNotIn("$software.DisplayVersion", content, str(path))
+
+    def test_windows_software_inventory_covers_user_hives_appx_and_claude_legacy_path(self) -> None:
+        paths = [
+            ROOT / "templates" / "rmm-windows" / "ShadowAIInventory.ps1.tmpl",
+            ROOT / "dist" / "rmm-windows" / "ShadowAIInventory.ps1",
+        ]
+        for path in paths:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("Registry::HKEY_USERS", content, str(path))
+            self.assertIn("Get-AppxPackage -AllUsers", content, str(path))
+            self.assertIn("AppData\\Local\\AnthropicClaude", content, str(path))
+            self.assertNotIn("reg.exe load", content.lower(), str(path))
+            self.assertNotIn("reg load", content.lower(), str(path))
+
+    def test_collectors_cover_all_local_profiles_without_emitting_raw_history(self) -> None:
+        windows_paths = [
+            ROOT / "templates" / "rmm-windows" / "ShadowAIInventory.ps1.tmpl",
+            ROOT / "dist" / "rmm-windows" / "ShadowAIInventory.ps1",
+        ]
+        for path in windows_paths:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("Win32_UserProfile", content, str(path))
+            self.assertIn("Collect-BrowserHistory -Profiles $profiles", content, str(path))
+            self.assertIn("Collect-BrowserExtensions -Profiles $profiles", content, str(path))
+            self.assertIn("Collect-KnownPaths -Profiles $profiles", content, str(path))
+            self.assertIn("matched_domain", content, str(path))
+            self.assertNotIn("raw_url =", content, str(path))
+            self.assertNotIn("page_title =", content, str(path))
+
+    def test_python_history_matching_respects_hostname_boundaries(self) -> None:
+        collector = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"
+        spec = importlib.util.spec_from_file_location("shadow_ai_collector", collector)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(module.history_indicator("claude.ai")["provider_id"], "anthropic")
+        self.assertEqual(module.history_indicator("team.claude.ai")["provider_id"], "anthropic")
+        self.assertIsNone(module.history_indicator("notclaude.ai"))
+        self.assertIsNone(module.history_indicator("claude.ai.example.invalid"))
 
     def test_sensitive_observation_key_is_rejected(self) -> None:
         collector = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"
@@ -170,6 +208,10 @@ class RepositoryTests(unittest.TestCase):
                 "attributes": {"command_line": "must not be accepted"},
             }
         )
+        with self.assertRaises(observation.ObservationError):
+            observation.validate_document(document)
+
+        document["findings"][-1]["attributes"] = {"history_url": "https://example.invalid"}
         with self.assertRaises(observation.ObservationError):
             observation.validate_document(document)
 

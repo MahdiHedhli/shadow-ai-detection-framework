@@ -4,8 +4,9 @@
 Read-only Shadow AI inventory collector for Windows RMM execution.
 
 .DESCRIPTION
-Emits metadata only. Command lines are evaluated locally and are never emitted.
-No prompt, response, configuration, environment value, or file content is read.
+Emits metadata only. Command lines and bounded browser-history databases are
+evaluated locally and are never emitted. No prompt, response, configuration,
+environment value, full URL, page title, or file content is emitted.
 
 .PARAMETER SelfTest
 Emits an empty conformant document without scanning the endpoint.
@@ -21,7 +22,7 @@ param([switch]$SelfTest)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $CollectorName = 'shadow-ai-rmm-windows'
-$CollectorVersion = '0.2.1'
+$CollectorVersion = '0.3.0'
 $MaxFindings = 5000
 $ExtensionIdPattern = '^[a-p]{32}$'
 $CatalogJson = @'
@@ -258,6 +259,300 @@ $BrowserCatalogJson = @'
 ]
 '@
 $BrowserExtensionCatalog = @($BrowserCatalogJson | ConvertFrom-Json)
+$DomainCatalogJson = @'
+[
+  {
+    "artifact_id": "net-anthropic-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "claude.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "anthropic"
+  },
+  {
+    "artifact_id": "net-anthropic-002",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "anthropic.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "anthropic"
+  },
+  {
+    "artifact_id": "net-character-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "character.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "characterai"
+  },
+  {
+    "artifact_id": "net-codeium-001",
+    "capability": "code_assistant",
+    "confidence": "low",
+    "domain": "codeium.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "codeium"
+  },
+  {
+    "artifact_id": "net-cohere-001",
+    "capability": "model_provider",
+    "confidence": "low",
+    "domain": "cohere.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "cohere"
+  },
+  {
+    "artifact_id": "net-cohere-002",
+    "capability": "model_provider",
+    "confidence": "low",
+    "domain": "cohere.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "cohere"
+  },
+  {
+    "artifact_id": "net-cursor-001",
+    "capability": "code_assistant",
+    "confidence": "low",
+    "domain": "cursor.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "cursor"
+  },
+  {
+    "artifact_id": "net-cursor-002",
+    "capability": "code_assistant",
+    "confidence": "low",
+    "domain": "cursor.sh",
+    "indicator_type": "registered_domain",
+    "provider_id": "cursor"
+  },
+  {
+    "artifact_id": "net-deepseek-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "deepseek.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "deepseek"
+  },
+  {
+    "artifact_id": "net-elevenlabs-001",
+    "capability": "audio_generation",
+    "confidence": "low",
+    "domain": "elevenlabs.io",
+    "indicator_type": "registered_domain",
+    "provider_id": "elevenlabs"
+  },
+  {
+    "artifact_id": "net-github-001",
+    "capability": "code_assistant",
+    "confidence": "low",
+    "domain": "githubcopilot.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "github"
+  },
+  {
+    "artifact_id": "net-google-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "gemini.google.com",
+    "indicator_type": "fqdn",
+    "provider_id": "google"
+  },
+  {
+    "artifact_id": "net-google-002",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "aistudio.google.com",
+    "indicator_type": "fqdn",
+    "provider_id": "google"
+  },
+  {
+    "artifact_id": "net-google-003",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "generativelanguage.googleapis.com",
+    "indicator_type": "fqdn",
+    "provider_id": "google"
+  },
+  {
+    "artifact_id": "net-groq-001",
+    "capability": "model_provider",
+    "confidence": "low",
+    "domain": "groq.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "groq"
+  },
+  {
+    "artifact_id": "net-huggingface-001",
+    "capability": "model_platform",
+    "confidence": "low",
+    "domain": "huggingface.co",
+    "indicator_type": "registered_domain",
+    "provider_id": "huggingface"
+  },
+  {
+    "artifact_id": "net-lmstudio-001",
+    "capability": "local_model_tooling",
+    "confidence": "low",
+    "domain": "lmstudio.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "lmstudio"
+  },
+  {
+    "artifact_id": "net-meta-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "meta.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "meta"
+  },
+  {
+    "artifact_id": "net-microsoft-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "copilot.microsoft.com",
+    "indicator_type": "fqdn",
+    "provider_id": "microsoft"
+  },
+  {
+    "artifact_id": "net-midjourney-001",
+    "capability": "image_generation",
+    "confidence": "low",
+    "domain": "midjourney.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "midjourney"
+  },
+  {
+    "artifact_id": "net-mistral-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "mistral.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "mistral"
+  },
+  {
+    "artifact_id": "net-ollama-001",
+    "capability": "local_model_tooling",
+    "confidence": "low",
+    "domain": "ollama.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "ollama"
+  },
+  {
+    "artifact_id": "net-openai-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "openai.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "openai"
+  },
+  {
+    "artifact_id": "net-openai-002",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "chatgpt.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "openai"
+  },
+  {
+    "artifact_id": "net-openai-003",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "oaiusercontent.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "openai"
+  },
+  {
+    "artifact_id": "net-openrouter-001",
+    "capability": "model_gateway",
+    "confidence": "low",
+    "domain": "openrouter.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "openrouter"
+  },
+  {
+    "artifact_id": "net-perplexity-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "perplexity.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "perplexity"
+  },
+  {
+    "artifact_id": "net-poe-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "poe.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "poe"
+  },
+  {
+    "artifact_id": "net-replicate-001",
+    "capability": "model_platform",
+    "confidence": "low",
+    "domain": "replicate.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "replicate"
+  },
+  {
+    "artifact_id": "net-runway-001",
+    "capability": "video_generation",
+    "confidence": "low",
+    "domain": "runwayml.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "runway"
+  },
+  {
+    "artifact_id": "net-stability-001",
+    "capability": "image_generation",
+    "confidence": "low",
+    "domain": "stability.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "stability"
+  },
+  {
+    "artifact_id": "net-together-001",
+    "capability": "model_provider",
+    "confidence": "low",
+    "domain": "together.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "together"
+  },
+  {
+    "artifact_id": "net-together-002",
+    "capability": "model_provider",
+    "confidence": "low",
+    "domain": "together.xyz",
+    "indicator_type": "registered_domain",
+    "provider_id": "together"
+  },
+  {
+    "artifact_id": "net-windsurf-001",
+    "capability": "code_assistant",
+    "confidence": "low",
+    "domain": "windsurf.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "windsurf"
+  },
+  {
+    "artifact_id": "net-xai-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "x.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "xai"
+  },
+  {
+    "artifact_id": "net-xai-002",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "grok.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "xai"
+  }
+]
+'@
+$DomainCatalog = @($DomainCatalogJson | ConvertFrom-Json)
+$MaxHistoryBytesPerProfile = 268435456
 
 function Get-IsoTimestamp {
     return [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
@@ -291,7 +586,7 @@ function New-ObservationDocument {
             os_version = [Environment]::OSVersion.VersionString
             architecture = Get-Architecture
         }
-        scope = [object[]]@('processes', 'known_paths', 'browser_extensions', 'installed_software')
+        scope = [object[]]@('processes', 'known_paths', 'browser_extensions', 'browser_history', 'installed_software')
         safety = [ordered]@{
             content_collected = $false
             raw_command_line_collected = $false
@@ -328,7 +623,7 @@ function Add-Finding {
         }
         return
     }
-    $evidenceLevel = if ($Category -eq 'process') { 3 } else { 2 }
+    $evidenceLevel = if ($Category -eq 'process') { 3 } elseif ($Category -eq 'browser_history') { 1 } else { 2 }
     $finding = [ordered]@{
         finding_id = ([Guid]::NewGuid().ToString())
         observed_at = Get-IsoTimestamp
@@ -434,6 +729,7 @@ function Get-UserProfiles {
                 $profiles += [pscustomobject]@{
                     User = Split-Path -Path ([string]$profile.LocalPath) -Leaf
                     Home = [string]$profile.LocalPath
+                    Sid = [string]$profile.SID
                 }
             }
         }
@@ -457,7 +753,10 @@ function Collect-KnownPaths {
         [pscustomobject]@{ Relative = '.cursor\mcp.json'; Category = 'config_file'; Indicator = $mcp['mcp.json'] },
         [pscustomobject]@{ Relative = '.mcp.json'; Category = 'config_file'; Indicator = $mcp['.mcp.json'] },
         [pscustomobject]@{ Relative = 'AppData\Roaming\Claude\claude_desktop_config.json'; Category = 'config_file'; Indicator = $mcp['claude_desktop_config.json'] },
+        [pscustomobject]@{ Relative = 'AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json'; Category = 'config_file'; Indicator = $mcp['claude_desktop_config.json'] },
         [pscustomobject]@{ Relative = 'AppData\Roaming\Cursor\User\globalStorage\mcp.json'; Category = 'config_file'; Indicator = $mcp['mcp.json'] },
+        [pscustomobject]@{ Relative = 'AppData\Roaming\Code\User\mcp.json'; Category = 'config_file'; Indicator = $mcp['mcp.json'] },
+        [pscustomobject]@{ Relative = 'AppData\Roaming\Code - Insiders\User\mcp.json'; Category = 'config_file'; Indicator = $mcp['mcp.json'] },
         [pscustomobject]@{ Relative = 'AppData\Local\LM Studio\models'; Category = 'model_directory'; Indicator = $modelIndicator }
     )
     foreach ($profile in $Profiles) {
@@ -473,7 +772,144 @@ function Collect-KnownPaths {
     }
 }
 
+function Get-OptionalPropertyValue {
+    param(
+        [Parameter(Mandatory = $true)]$InputObject,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+    $property = $InputObject.PSObject.Properties[$Name]
+    if ($null -eq $property) { return $null }
+    return $property.Value
+}
+
+function Add-SoftwareCandidate {
+    param(
+        [AllowNull()][string]$DisplayName,
+        [AllowNull()][string]$Version,
+        [Parameter(Mandatory = $true)][string]$InventorySource,
+        [AllowNull()][string]$SubjectUser,
+        [Parameter(Mandatory = $true)][object[]]$NameIndicators,
+        [Parameter(Mandatory = $true)][hashtable]$Seen,
+        [hashtable]$ExtraAttributes = @{}
+    )
+    if ([string]::IsNullOrWhiteSpace($DisplayName)) { return }
+    foreach ($mapping in $NameIndicators) {
+        if ($DisplayName.IndexOf($mapping.Pattern, [StringComparison]::OrdinalIgnoreCase) -lt 0) { continue }
+        $dedupeKey = '{0}|{1}|{2}|{3}' -f $mapping.Indicator.artifact_id, $InventorySource, [string]$SubjectUser, $DisplayName
+        if ($Seen.ContainsKey($dedupeKey)) { continue }
+        $attributes = @{
+            display_name = $DisplayName
+            version = if ($null -eq $Version) { '' } else { $Version }
+            inventory_source = $InventorySource
+        }
+        foreach ($entry in $ExtraAttributes.GetEnumerator()) {
+            $attributes[[string]$entry.Key] = $entry.Value
+        }
+        Add-Finding -Category 'software' -Indicator $mapping.Indicator -SubjectUser $SubjectUser -Attributes $attributes
+        $Seen[$dedupeKey] = $true
+    }
+}
+
+function Collect-UninstallRegistryPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$RegistryPath,
+        [Parameter(Mandatory = $true)][string]$InventorySource,
+        [Parameter(Mandatory = $true)][string]$Operation,
+        [AllowNull()][string]$SubjectUser,
+        [Parameter(Mandatory = $true)][object[]]$NameIndicators,
+        [Parameter(Mandatory = $true)][hashtable]$Seen
+    )
+    try {
+        foreach ($software in @(Get-ItemProperty -Path $RegistryPath -ErrorAction Stop)) {
+            $displayName = [string](Get-OptionalPropertyValue -InputObject $software -Name 'DisplayName')
+            if ([string]::IsNullOrWhiteSpace($displayName)) { continue }
+            $displayVersion = [string](Get-OptionalPropertyValue -InputObject $software -Name 'DisplayVersion')
+            Add-SoftwareCandidate -DisplayName $displayName -Version $displayVersion -InventorySource $InventorySource -SubjectUser $SubjectUser -NameIndicators $NameIndicators -Seen $Seen
+        }
+    } catch [System.Management.Automation.ItemNotFoundException] {
+        return
+    } catch [System.Management.Automation.DriveNotFoundException] {
+        return
+    } catch {
+        Add-PartialError -Operation $Operation -Exception $_.Exception
+    }
+}
+
+function Collect-AppxSoftware {
+    param(
+        [Parameter(Mandatory = $true)][object[]]$NameIndicators,
+        [Parameter(Mandatory = $true)][hashtable]$Seen,
+        [Parameter(Mandatory = $true)][object[]]$Profiles
+    )
+    try {
+        if ($null -eq (Get-Command -Name 'Get-AppxPackage' -ErrorAction SilentlyContinue)) {
+            throw [InvalidOperationException]::new('Get-AppxPackage unavailable')
+        }
+        foreach ($package in @(Get-AppxPackage -AllUsers -ErrorAction Stop)) {
+            $packageName = [string](Get-OptionalPropertyValue -InputObject $package -Name 'Name')
+            $packageVersion = [string](Get-OptionalPropertyValue -InputObject $package -Name 'Version')
+            $matchedUsers = @()
+            foreach ($packageUser in @((Get-OptionalPropertyValue -InputObject $package -Name 'PackageUserInformation'))) {
+                if ($null -eq $packageUser) { continue }
+                $packageSid = [string](Get-OptionalPropertyValue -InputObject $packageUser -Name 'UserSecurityId')
+                $installState = [string](Get-OptionalPropertyValue -InputObject $packageUser -Name 'InstallState')
+                if ($installState -and $installState -ne 'Installed') { continue }
+                foreach ($profile in $Profiles) {
+                    if ($packageSid -and $packageSid.Equals([string]$profile.Sid, [StringComparison]::OrdinalIgnoreCase)) {
+                        $matchedUsers += [string]$profile.User
+                    }
+                }
+            }
+            if ($matchedUsers.Count -eq 0) {
+                Add-SoftwareCandidate -DisplayName $packageName -Version $packageVersion -InventorySource 'appx_all_users' -SubjectUser $null -NameIndicators $NameIndicators -Seen $Seen -ExtraAttributes @{
+                    package_name = $packageName
+                }
+                continue
+            }
+            foreach ($matchedUser in @($matchedUsers | Select-Object -Unique)) {
+                Add-SoftwareCandidate -DisplayName $packageName -Version $packageVersion -InventorySource 'appx_all_users' -SubjectUser $matchedUser -NameIndicators $NameIndicators -Seen $Seen -ExtraAttributes @{
+                    package_name = $packageName
+                }
+            }
+        }
+    } catch {
+        Add-PartialError -Operation 'appx_inventory' -Exception $_.Exception
+    }
+}
+
+function Collect-KnownApplicationPaths {
+    param(
+        [Parameter(Mandatory = $true)][object[]]$Profiles,
+        [Parameter(Mandatory = $true)][object[]]$NameIndicators,
+        [Parameter(Mandatory = $true)][hashtable]$Seen
+    )
+    foreach ($profile in $Profiles) {
+        $claudeRoot = Join-Path -Path $profile.Home -ChildPath 'AppData\Local\AnthropicClaude'
+        $candidates = @((Join-Path -Path $claudeRoot -ChildPath 'claude.exe'))
+        if (Test-SafePath -LiteralPath $claudeRoot) {
+            try {
+                foreach ($versionDirectory in @(Get-ChildItem -LiteralPath $claudeRoot -Directory -Force -ErrorAction Stop | Where-Object {
+                    $_.Name -like 'app-*' -and (($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)
+                } | Select-Object -First 128)) {
+                    $candidates += Join-Path -Path $versionDirectory.FullName -ChildPath 'claude.exe'
+                }
+            } catch {
+                Add-PartialError -Operation 'known_application_paths' -Exception $_.Exception
+            }
+        }
+        foreach ($candidate in $candidates) {
+            if (-not (Test-SafePath -LiteralPath $candidate)) { continue }
+            Add-SoftwareCandidate -DisplayName 'Claude Desktop' -Version '' -InventorySource 'known_path' -SubjectUser $profile.User -NameIndicators $NameIndicators -Seen $Seen -ExtraAttributes @{
+                location = Get-TokenizedPath -LiteralPath $candidate -HomePath $profile.Home
+                presence_only = $true
+            }
+            break
+        }
+    }
+}
+
 function Collect-InstalledSoftware {
+    param([Parameter(Mandatory = $true)][object[]]$Profiles)
     $nameIndicators = @(
         [pscustomobject]@{ Pattern = 'Ollama'; Indicator = (New-SyntheticIndicator 'software-ollama' 'ollama' 'local_model_runtime' 'high') },
         [pscustomobject]@{ Pattern = 'LM Studio'; Indicator = (New-SyntheticIndicator 'software-lmstudio' 'lmstudio' 'local_model_runtime' 'high') },
@@ -484,34 +920,106 @@ function Collect-InstalledSoftware {
         [pscustomobject]@{ Pattern = 'Cursor'; Indicator = (New-SyntheticIndicator 'software-cursor' 'cursor' 'ai_coding_assistant') },
         [pscustomobject]@{ Pattern = 'Windsurf'; Indicator = (New-SyntheticIndicator 'software-windsurf' 'windsurf' 'ai_coding_assistant') }
     )
-    $registryPaths = @(
-        'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
-        'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
-        'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*'
-    )
-    try {
-        foreach ($software in @(Get-ItemProperty -Path $registryPaths -ErrorAction SilentlyContinue)) {
-            # Uninstall registry entries are not schema-consistent. Under StrictMode,
-            # direct access to an absent DisplayName or DisplayVersion property throws.
-            $displayNameProperty = $software.PSObject.Properties['DisplayName']
-            if ($null -eq $displayNameProperty) { continue }
-            $displayName = [string]$displayNameProperty.Value
-            if ([string]::IsNullOrWhiteSpace($displayName)) { continue }
+    $seen = @{}
+    foreach ($registrySource in @(
+        [pscustomobject]@{ Path = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*'; Source = 'uninstall_registry_machine'; Operation = 'software_registry_machine' },
+        [pscustomobject]@{ Path = 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'; Source = 'uninstall_registry_machine'; Operation = 'software_registry_machine_wow6432' },
+        [pscustomobject]@{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*'; Source = 'uninstall_registry_current_user'; Operation = 'software_registry_current_user' }
+    )) {
+        Collect-UninstallRegistryPath -RegistryPath $registrySource.Path -InventorySource $registrySource.Source -Operation $registrySource.Operation -SubjectUser $null -NameIndicators $nameIndicators -Seen $seen
+    }
 
-            $displayVersionProperty = $software.PSObject.Properties['DisplayVersion']
-            $displayVersion = if ($null -eq $displayVersionProperty) { '' } else { [string]$displayVersionProperty.Value }
-            foreach ($mapping in $nameIndicators) {
-                if ($displayName.IndexOf($mapping.Pattern, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
-                    Add-Finding -Category 'software' -Indicator $mapping.Indicator -SubjectUser $null -Attributes @{
-                        display_name = $displayName
-                        version = $displayVersion
-                        inventory_source = 'uninstall_registry'
-                    }
+    # Read only hives Windows already has loaded. Loading offline NTUSER.DAT files
+    # would mutate registry state and is intentionally out of scope.
+    foreach ($profile in $Profiles) {
+        if ([string]::IsNullOrWhiteSpace($profile.Sid)) { continue }
+        $loadedUserPath = 'Registry::HKEY_USERS\{0}\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' -f $profile.Sid
+        Collect-UninstallRegistryPath -RegistryPath $loadedUserPath -InventorySource 'uninstall_registry_loaded_user' -Operation 'software_registry_loaded_user' -SubjectUser $profile.User -NameIndicators $nameIndicators -Seen $seen
+    }
+
+    Collect-AppxSoftware -NameIndicators $nameIndicators -Seen $seen -Profiles $Profiles
+    Collect-KnownApplicationPaths -Profiles $Profiles -NameIndicators $nameIndicators -Seen $seen
+}
+
+function Get-HistoryDomainMatchers {
+    $matchers = @()
+    foreach ($item in $DomainCatalog) {
+        $escapedDomain = [Regex]::Escape(([string]$item.domain).ToLowerInvariant())
+        $hostPattern = if ($item.indicator_type -eq 'registered_domain') {
+            '(?:[a-z0-9-]+\.)*' + $escapedDomain
+        } else {
+            $escapedDomain
+        }
+        $matchers += [pscustomobject]@{
+            Indicator = $item
+            Regex = [Regex]::new('(?i)https?://' + $hostPattern + '(?:[:/?#]|$)', [Text.RegularExpressions.RegexOptions]::CultureInvariant)
+        }
+    }
+    return @($matchers)
+}
+
+function Find-HistoryDomainMatches {
+    param(
+        [Parameter(Mandatory = $true)][string]$LiteralPath,
+        [Parameter(Mandatory = $true)][object[]]$Matchers
+    )
+    $foundIndicators = @{}
+    $stream = $null
+    try {
+        $stream = [IO.File]::Open($LiteralPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+        if ($stream.Length -gt $MaxHistoryBytesPerProfile) {
+            throw [IO.InvalidDataException]::new('history database exceeds per-profile byte limit')
+        }
+        $buffer = New-Object byte[] 1048576
+        $carry = ''
+        while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            $text = $carry + [Text.Encoding]::ASCII.GetString($buffer, 0, $read)
+            foreach ($matcher in $Matchers) {
+                $key = [string]$matcher.Indicator.artifact_id
+                if (-not $foundIndicators.ContainsKey($key) -and $matcher.Regex.IsMatch($text)) {
+                    $foundIndicators[$key] = $matcher.Indicator
                 }
             }
+            if ($text.Length -gt 1024) { $carry = $text.Substring($text.Length - 1024) } else { $carry = $text }
         }
-    } catch {
-        Add-PartialError -Operation 'software_inventory' -Exception $_.Exception
+    } finally {
+        if ($null -ne $stream) { $stream.Dispose() }
+    }
+    return @($foundIndicators.Values)
+}
+
+function Collect-BrowserHistory {
+    param([Parameter(Mandatory = $true)][object[]]$Profiles)
+    $matchers = @(Get-HistoryDomainMatchers)
+    $browserRoots = @(
+        [pscustomobject]@{ Browser = 'chrome'; Relative = 'AppData\Local\Google\Chrome\User Data'; HistoryName = 'History' },
+        [pscustomobject]@{ Browser = 'edge'; Relative = 'AppData\Local\Microsoft\Edge\User Data'; HistoryName = 'History' },
+        [pscustomobject]@{ Browser = 'brave'; Relative = 'AppData\Local\BraveSoftware\Brave-Browser\User Data'; HistoryName = 'History' },
+        [pscustomobject]@{ Browser = 'firefox'; Relative = 'AppData\Roaming\Mozilla\Firefox\Profiles'; HistoryName = 'places.sqlite' }
+    )
+    foreach ($profile in $Profiles) {
+        foreach ($browser in $browserRoots) {
+            $root = Join-Path -Path $profile.Home -ChildPath $browser.Relative
+            if (-not (Test-SafePath -LiteralPath $root)) { continue }
+            try {
+                foreach ($browserProfile in @(Get-ChildItem -LiteralPath $root -Directory -Force -ErrorAction Stop | Select-Object -First 128)) {
+                    if (($browserProfile.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
+                    $historyPath = Join-Path -Path $browserProfile.FullName -ChildPath $browser.HistoryName
+                    if (-not (Test-SafePath -LiteralPath $historyPath)) { continue }
+                    foreach ($indicator in @(Find-HistoryDomainMatches -LiteralPath $historyPath -Matchers $matchers)) {
+                        Add-Finding -Category 'browser_history' -Indicator $indicator -SubjectUser $profile.User -Attributes @{
+                            browser = $browser.Browser
+                            profile = $browserProfile.Name
+                            matched_domain = [string]$indicator.domain
+                            match_basis = 'history_database_string_match_local_only'
+                            presence_only = $true
+                        }
+                    }
+                }
+            } catch {
+                Add-PartialError -Operation ('browser_history_' + $browser.Browser) -Exception $_.Exception
+            }
+        }
     }
 }
 
@@ -564,8 +1072,9 @@ try {
         Collect-Processes
         $profiles = @(Get-UserProfiles)
         Collect-KnownPaths -Profiles $profiles
-        Collect-InstalledSoftware
+        Collect-InstalledSoftware -Profiles $profiles
         Collect-BrowserExtensions -Profiles $profiles
+        Collect-BrowserHistory -Profiles $profiles
     }
     $Document | ConvertTo-Json -Depth 8 -Compress
     if ($Document.collector.partial) { exit 2 }

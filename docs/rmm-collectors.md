@@ -13,14 +13,20 @@ The endpoint indicator array inside each collector is generated from `catalog/en
 
 ## Privacy and security boundary
 
-The collectors inspect only process metadata and a bounded set of known application, model, MCP configuration, and Chromium extension locations. Browser extension findings are emitted only for exact IDs in `catalog/browser_extensions.csv`; unrelated extensions are not reported. They do not perform a whole-disk search or follow symbolic links/reparse points.
+The collectors inspect process metadata and a bounded set of known application, model, MCP configuration, Chromium extension, and browser-history locations for every discovered local user profile. Browser extension findings are emitted only for exact IDs in `catalog/browser_extensions.csv`; unrelated extensions are not reported. They do not perform a whole-disk search or follow symbolic links/reparse points.
 
-Command-line arguments are used only for local matching and are never included in output. The collectors do not read or emit:
+On Windows, installed-software coverage combines machine uninstall keys, the current-user key, uninstall keys from user hives that Windows already has loaded, `Get-AppxPackage -AllUsers`, and bounded known application locations. The collector never loads offline user registry hives. Current Claude Desktop deployments are detected through their `Claude` MSIX package; the bounded `%LOCALAPPDATA%\AnthropicClaude` check covers the legacy standalone installer.
+
+Command-line arguments and browser-history URLs are evaluated only on the endpoint and are never included in output. History inspection is capped at 256 MiB per browser profile. The macOS/Linux collector queries URL hostnames from each supported browser database; the Windows collector performs a bounded string match because Windows PowerShell 5.1 does not include a SQLite client. History findings contain only the matched domain from the public catalog, browser name, profile name, and local username.
+
+The Windows string match is low-confidence, presence-only evidence: deleted SQLite records or URL-shaped strings embedded elsewhere in the database can remain detectable. A history finding shows that a cataloged AI domain was present in the browser database; it does not prove account ownership, login state, data submission, or policy violation.
+
+The collectors do not emit:
 
 - prompts or responses;
 - file or configuration contents;
 - API keys, tokens, or environment-variable values;
-- browser history;
+- raw browser URLs, page titles, timestamps, or unrelated history;
 - raw process command lines.
 
 They make no network requests and perform no remediation. A finding means “observed,” not “malicious” or “policy-violating.” Apply tenant-specific approval and risk policy after ingestion.
@@ -43,6 +49,8 @@ This convention intentionally avoids using a nonzero exit code to signal that AI
 4. Set an output-size limit appropriate to the RMM. The schema caps findings at 5,000; production ingestion should additionally enforce a byte limit.
 5. Store observations in a tenant-isolated location, enrich them with client-specific approval state, and expire endpoint metadata according to the client retention policy.
 
+For Windows pilots, include at least one confirmed per-user MSIX application and one traditional uninstall-registry application. Compare the collector result with RMM application inventory; RMM products commonly omit per-user packaged applications.
+
 Do not enable automated removal or blocking directly from these inventory findings. Require corroborating evidence and a client-approved response policy first.
 
 ## Self-test examples
@@ -55,4 +63,4 @@ Do not enable automated removal or blocking directly from these inventory findin
 python3 shadow_ai_inventory.py --self-test | python3 tools/validate_observation.py
 ```
 
-Self-test emits an empty observation and does not enumerate profiles, processes, installed software, or browser extensions.
+Self-test emits an empty observation and does not enumerate profiles, processes, installed software, browser extensions, or browser history.

@@ -43,7 +43,7 @@ pwsh -NoProfile -File dist/rmm-windows/ShadowAIInventory.ps1 -SelfTest
 
 - Do not treat all AI use as malicious.
 - Do not claim data transfer without telemetry that actually measures it.
-- Do not collect prompts, responses, API keys, or file contents by default.
+- Do not emit prompts, responses, API keys, raw browser history, or file contents by default.
 - Keep client policy and approval state separate from the shared indicator catalog.
 - Preserve tenant isolation in collection, storage, investigation, and reporting.
 - Require source, validation date, and licensing information for borrowed material.
