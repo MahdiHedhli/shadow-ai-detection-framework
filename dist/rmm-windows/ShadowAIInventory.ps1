@@ -22,7 +22,7 @@ param([switch]$SelfTest)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $CollectorName = 'shadow-ai-rmm-windows'
-$CollectorVersion = '0.5.0'
+$CollectorVersion = '0.5.1'
 $MaxFindings = 5000
 $ExtensionIdPattern = '^[a-p]{32}$'
 $CatalogJson = @'
@@ -243,6 +243,18 @@ $BrowserCatalogJson = @'
     "extension_id": "difoiogjjojoaoomphldepapgpbgkhkb",
     "extension_name": "Sider AI",
     "provider_id": "sider"
+  },
+  {
+    "browser": "chrome",
+    "extension_id": "ejcfepkfckglbgocfkanmcdngdijcgld",
+    "extension_name": "ChatGPT search",
+    "provider_id": "openai"
+  },
+  {
+    "browser": "chrome",
+    "extension_id": "fcoeoabgfenejglbffodgkkbkcdhcgfn",
+    "extension_name": "Claude",
+    "provider_id": "anthropic"
   },
   {
     "browser": "chromium-family",
