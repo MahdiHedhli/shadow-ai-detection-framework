@@ -168,6 +168,24 @@ class RepositoryTests(unittest.TestCase):
             self.assertEqual(content.count("[AllowEmptyCollection()][object[]]$Profiles"), 6, str(path))
             self.assertIn("profile_inventory_empty", content, str(path))
 
+    def test_windows_known_paths_use_deterministic_indicators(self) -> None:
+        paths = [
+            ROOT / "templates" / "rmm-windows" / "ShadowAIInventory.ps1.tmpl",
+            ROOT / "dist" / "rmm-windows" / "ShadowAIInventory.ps1",
+        ]
+        for path in paths:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn(
+                "New-SyntheticIndicator 'file-model-001' 'generic' 'model_weight' 'high'", content, str(path)
+            )
+            self.assertIn(
+                "New-SyntheticIndicator 'file-mcp-001' 'mcp' 'mcp_configuration' 'medium'", content, str(path)
+            )
+            self.assertNotIn("$mcp['mcp.json']", content, str(path))
+            self.assertNotIn(
+                "$Catalog | Where-Object { $_.artifact_id -eq 'file-model-001' }", content, str(path)
+            )
+
     def test_windows_fatal_diagnostics_are_bounded_and_content_free(self) -> None:
         paths = [
             ROOT / "templates" / "rmm-windows" / "ShadowAIInventory.ps1.tmpl",
