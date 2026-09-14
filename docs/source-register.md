@@ -17,6 +17,8 @@ This register distinguishes material that may be adapted from material that is o
 | [Chrome Web Store](https://chromewebstore.google.com/) | Google service terms; listing facts are not copied as code | Validate exact extension IDs and publisher-facing names | Factual indicators only; revalidate regularly |
 | [Anthropic Claude extension](https://chromewebstore.google.com/detail/claude/fcoeoabgfenejglbffodgkkbkcdhcgfn) | Google service terms | Validate the current official Claude extension ID and publisher | Factual indicator only |
 | [OpenAI ChatGPT extension](https://chromewebstore.google.com/detail/chatgpt/hehggadaopoacecdllhhajmbjkdcmajg) | Google service terms | Validate the current official ChatGPT extension ID and publisher | Factual indicator only |
+| [Apple: Safari extensions management](https://support.apple.com/guide/deployment/depff7fad9d8/web) | Apple documentation terms | Define managed Safari extension identity and state for macOS 15 or later | Factual implementation reference; no code copied |
+| [Apple: Privacy Preferences Policy Control](https://support.apple.com/guide/deployment/dep38df53c2a/web) | Apple documentation terms | Plan explicit MDM-delivered privacy permissions where enhanced Mac evidence requires them | Factual implementation reference; no code copied |
 | [LocalMCPInventory](https://github.com/kannanprabu/LocalMCPInventory) | No license found | MCP discovery research | Reference only; do not copy |
 | [shadow-ai-detection-kql](https://github.com/ycarmack2647/shadow-ai-detection-kql) | No license found | Detection research | Reference only; do not copy |
 | [SecretsNShadows](https://github.com/samikroy/SecretsNShadows) | No license found | Detection research | Reference only; do not copy |
