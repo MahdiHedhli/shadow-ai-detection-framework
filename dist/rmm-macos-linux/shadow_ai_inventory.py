@@ -25,7 +25,7 @@ from urllib.parse import urlsplit
 
 
 COLLECTOR_NAME = "shadow-ai-rmm-macos-linux"
-COLLECTOR_VERSION = "0.6.0"
+COLLECTOR_VERSION = "0.6.1"
 MAX_FINDINGS = 5000
 MAX_HOMES = 256
 MAX_PROCESS_BYTES = 65536
@@ -994,6 +994,60 @@ def extension_name_classification(extension_name: str | None) -> dict[str, str] 
     )
 
 
+def resolve_manifest_localized_value(value: object, manifest: dict[str, object], version: Path) -> str | None:
+    safe_value = safe_extension_name(value)
+    if safe_value is None:
+        return None
+    message_match = re.fullmatch(r"__MSG_([A-Za-z0-9_@]+)__", safe_value)
+    if message_match is None:
+        return safe_value
+    locale = safe_extension_name(manifest.get("default_locale"))
+    if locale is None or not re.fullmatch(r"[A-Za-z0-9_-]{2,20}", locale):
+        return None
+    messages = read_bounded_json(version / "_locales" / locale / "messages.json")
+    if not isinstance(messages, dict):
+        return None
+    message = messages.get(message_match.group(1))
+    if not isinstance(message, dict):
+        return None
+    return safe_extension_name(message.get("message"))
+
+
+def manifest_text_classification(extension: Path) -> dict[str, str] | None:
+    """Classify locally from manifest text while emitting no description content."""
+    try:
+        versions = [item for item in extension.iterdir() if safe_exists(item) and item.is_dir()]
+    except OSError:
+        return None
+    for version in sorted(versions, key=lambda item: item.name, reverse=True)[:8]:
+        manifest = read_bounded_json(version / "manifest.json")
+        if not isinstance(manifest, dict):
+            continue
+        text_values = [
+            resolved
+            for key in ("name", "short_name", "description")
+            if (resolved := resolve_manifest_localized_value(manifest.get(key), manifest, version)) is not None
+        ]
+        for action_key in ("action", "browser_action", "page_action"):
+            action = manifest.get(action_key)
+            if not isinstance(action, dict):
+                continue
+            resolved = resolve_manifest_localized_value(action.get("default_title"), manifest, version)
+            if resolved is not None:
+                text_values.append(resolved)
+        for value in text_values:
+            named = extension_name_classification(value)
+            if named:
+                return named
+        combined = " ".join(text_values)
+        if re.search(
+            r"(?i)\b(?:gpt(?:-?[0-9]+)?|llm|large language model|generative ai|ai assistant|ai-powered|artificial intelligence)\b",
+            combined,
+        ):
+            return {"provider_id": "generic", "confidence": "low"}
+    return None
+
+
 def manifest_domain_classification(extension: Path) -> dict[str, str] | None:
     """Classify locally from URL access declarations without emitting the manifest."""
     try:
@@ -1088,6 +1142,12 @@ def collect_chromium_extension_profile(
                 provider_id = classification["provider_id"]
                 confidence = classification["confidence"]
         matched_domain: str | None = None
+        if provider_id is None:
+            text_classification = manifest_text_classification(extension)
+            if text_classification:
+                provider_id = text_classification["provider_id"]
+                confidence = text_classification["confidence"]
+                classification_basis = "manifest_text_local_only"
         if provider_id is None:
             domain_classification = manifest_domain_classification(extension)
             if domain_classification:

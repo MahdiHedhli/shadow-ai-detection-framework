@@ -240,6 +240,7 @@ class RepositoryTests(unittest.TestCase):
             content = path.read_text(encoding="utf-8")
             self.assertIn("BROWSER_EXTENSION_NAME_CATALOG_JSON", content, str(path))
             self.assertIn("manifest_name_local_only", content, str(path))
+            self.assertIn("manifest_text_local_only", content, str(path))
             self.assertIn("manifest_domain_local_only", content, str(path))
             normalized = content.casefold().replace("_", "")
             self.assertIn("maxmanifest", normalized, str(path))
@@ -304,6 +305,24 @@ class RepositoryTests(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertIsNone(module.manifest_domain_classification(root / "ordinary-domain"))
+
+            text_version = root / "manifest-text" / "1.0.0"
+            text_version.mkdir(parents=True)
+            (text_version / "manifest.json").write_text(
+                '{"name":"Opaque Helper","description":"An AI-powered writing assistant"}',
+                encoding="utf-8",
+            )
+            text_match = module.manifest_text_classification(root / "manifest-text")
+            self.assertIsNotNone(text_match)
+            self.assertEqual(text_match["provider_id"], "generic")
+
+            ordinary_text_version = root / "ordinary-text" / "1.0.0"
+            ordinary_text_version.mkdir(parents=True)
+            (ordinary_text_version / "manifest.json").write_text(
+                '{"name":"Ordinary Helper","description":"Organizes bookmarks locally"}',
+                encoding="utf-8",
+            )
+            self.assertIsNone(module.manifest_text_classification(root / "ordinary-text"))
 
     def test_python_extension_inventory_counts_do_not_disclose_unclassified_names(self) -> None:
         collector = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"
