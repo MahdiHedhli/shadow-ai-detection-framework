@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Read-only Shadow AI inventory collector for macOS and Linux.
 
-The collector emits metadata only. It never emits command lines, environment
-values, prompts, responses, file contents, or configuration contents.
+The collector emits metadata only. Command lines and bounded browser-history
+databases are evaluated locally. It never emits raw command lines, URLs, page
+titles, environment values, prompts, responses, or configuration contents.
 """
 
 from __future__ import annotations
@@ -13,22 +14,27 @@ import os
 import platform
 import re
 import socket
+import sqlite3
 import stat
 import subprocess
 import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 COLLECTOR_NAME = "shadow-ai-rmm-macos-linux"
-COLLECTOR_VERSION = "0.2.0"
+COLLECTOR_VERSION = "0.3.0"
 MAX_FINDINGS = 5000
 MAX_HOMES = 256
 MAX_PROCESS_BYTES = 65536
+MAX_HISTORY_BYTES_PER_PROFILE = 268435456
+MAX_HISTORY_ROWS_PER_PROFILE = 1000000
 EXTENSION_ID_RE = re.compile(r"^[a-p]{32}$")
 CATALOG = {{ENDPOINT_CATALOG_JSON}}
 BROWSER_EXTENSION_CATALOG = {{BROWSER_EXTENSION_CATALOG_JSON}}
+DOMAIN_CATALOG = {{DOMAIN_CATALOG_JSON}}
 
 
 def now() -> str:
@@ -52,7 +58,7 @@ def new_document() -> dict[str, object]:
             "os_version": platform.platform(),
             "architecture": platform.machine(),
         },
-        "scope": ["processes", "known_paths", "browser_extensions", "installed_software"],
+        "scope": ["processes", "known_paths", "browser_extensions", "browser_history", "installed_software"],
         "safety": {
             "content_collected": False,
             "raw_command_line_collected": False,
@@ -93,7 +99,7 @@ def add_finding(
             "provider_id": indicator["provider_id"],
             "capability": indicator["capability"],
             "confidence": indicator["confidence"],
-            "evidence_level": 3 if category == "process" else 2,
+            "evidence_level": 3 if category == "process" else 1 if category == "browser_history" else 2,
             "subject_user": subject_user,
             "attributes": attributes,
         }
@@ -306,6 +312,106 @@ def collect_browser_extensions(document: dict[str, object], homes: list[tuple[st
                 record_error(document, f"browser_inventory_{browser}", exc)
 
 
+def history_indicator(hostname: str) -> dict[str, str] | None:
+    host = hostname.casefold().rstrip(".")
+    for item in DOMAIN_CATALOG:
+        domain = item["domain"].casefold()
+        if item["indicator_type"] == "fqdn":
+            matched = host == domain
+        else:
+            matched = host == domain or host.endswith("." + domain)
+        if matched:
+            return item
+    return None
+
+
+def collect_history_database(
+    document: dict[str, object],
+    path: Path,
+    browser: str,
+    profile: str,
+    user: str,
+) -> None:
+    if path.stat().st_size > MAX_HISTORY_BYTES_PER_PROFILE:
+        record_error(document, f"browser_history_{browser}", ValueError("history_size_limit"))
+        return
+    found: dict[str, dict[str, str]] = {}
+    connection: sqlite3.Connection | None = None
+    try:
+        connection = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=2)
+        cursor = connection.execute(
+            "SELECT url FROM urls WHERE url IS NOT NULL LIMIT ?",
+            (MAX_HISTORY_ROWS_PER_PROFILE,),
+        )
+        for (raw_url,) in cursor:
+            if not isinstance(raw_url, str):
+                continue
+            indicator = history_indicator(urlsplit(raw_url).hostname or "")
+            if indicator is not None:
+                found[indicator["artifact_id"]] = indicator
+    except (OSError, sqlite3.Error, ValueError) as exc:
+        record_error(document, f"browser_history_{browser}", exc)
+        return
+    finally:
+        if connection is not None:
+            connection.close()
+    for indicator in found.values():
+        add_finding(
+            document,
+            "browser_history",
+            indicator,
+            user,
+            browser=browser,
+            profile=profile,
+            matched_domain=indicator["domain"],
+            match_basis="history_database_hostname_match_local_only",
+            presence_only=True,
+        )
+
+
+def collect_browser_history(document: dict[str, object], homes: list[tuple[str, Path]]) -> None:
+    chromium_roots = {
+        "macos": [
+            ("chrome", Path("Library/Application Support/Google/Chrome")),
+            ("edge", Path("Library/Application Support/Microsoft Edge")),
+            ("brave", Path("Library/Application Support/BraveSoftware/Brave-Browser")),
+        ],
+        "linux": [
+            ("chrome", Path(".config/google-chrome")),
+            ("chromium", Path(".config/chromium")),
+            ("edge", Path(".config/microsoft-edge")),
+            ("brave", Path(".config/BraveSoftware/Brave-Browser")),
+        ],
+    }
+    firefox_roots = {
+        "macos": Path("Library/Application Support/Firefox/Profiles"),
+        "linux": Path(".mozilla/firefox"),
+    }
+    for user, home in homes:
+        for browser, relative_root in chromium_roots.get(os_family(), []):
+            root = home / relative_root
+            try:
+                if not safe_exists(root):
+                    continue
+                profiles = [item for item in root.iterdir() if safe_exists(item) and item.is_dir()]
+                for browser_profile in sorted(profiles, key=lambda item: item.name.casefold())[:128]:
+                    history_path = browser_profile / "History"
+                    if safe_exists(history_path):
+                        collect_history_database(document, history_path, browser, browser_profile.name, user)
+            except OSError as exc:
+                record_error(document, f"browser_history_{browser}", exc)
+        firefox_root = home / firefox_roots[os_family()]
+        try:
+            if safe_exists(firefox_root):
+                profiles = [item for item in firefox_root.iterdir() if safe_exists(item) and item.is_dir()]
+                for browser_profile in sorted(profiles, key=lambda item: item.name.casefold())[:128]:
+                    history_path = browser_profile / "places.sqlite"
+                    if safe_exists(history_path):
+                        collect_history_database(document, history_path, "firefox", browser_profile.name, user)
+        except OSError as exc:
+            record_error(document, "browser_history_firefox", exc)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--self-test", action="store_true", help="emit an empty conformant document without scanning")
@@ -319,6 +425,7 @@ def main() -> int:
             collect_processes(document)
             collect_known_paths(document, homes)
             collect_browser_extensions(document, homes)
+            collect_browser_history(document, homes)
     print(json.dumps(document, separators=(",", ":"), sort_keys=True))
     collector = document["collector"]
     assert isinstance(collector, dict)

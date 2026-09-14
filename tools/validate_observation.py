@@ -29,9 +29,9 @@ REQUIRED_FALSE_SAFETY = {
     "full_disk_search_performed",
     "symlinks_followed",
 }
-ALLOWED_CATEGORIES = {"process", "software", "model_directory", "config_file", "browser_extension"}
+ALLOWED_CATEGORIES = {"process", "software", "model_directory", "config_file", "browser_extension", "browser_history"}
 ALLOWED_CONFIDENCE = {"low", "medium", "high"}
-ALLOWED_SCOPE = {"processes", "known_paths", "browser_extensions", "installed_software"}
+ALLOWED_SCOPE = {"processes", "known_paths", "browser_extensions", "browser_history", "installed_software"}
 SENSITIVE_KEYS = {
     "command_line",
     "raw_command_line",
@@ -42,6 +42,11 @@ SENSITIVE_KEYS = {
     "environment_value",
     "api_key",
     "secret",
+    "url",
+    "raw_url",
+    "history_url",
+    "title",
+    "page_title",
 }
 
 

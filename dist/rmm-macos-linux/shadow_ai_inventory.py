@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Read-only Shadow AI inventory collector for macOS and Linux.
 
-The collector emits metadata only. It never emits command lines, environment
-values, prompts, responses, file contents, or configuration contents.
+The collector emits metadata only. Command lines and bounded browser-history
+databases are evaluated locally. It never emits raw command lines, URLs, page
+titles, environment values, prompts, responses, or configuration contents.
 """
 
 from __future__ import annotations
@@ -13,19 +14,23 @@ import os
 import platform
 import re
 import socket
+import sqlite3
 import stat
 import subprocess
 import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 COLLECTOR_NAME = "shadow-ai-rmm-macos-linux"
-COLLECTOR_VERSION = "0.2.0"
+COLLECTOR_VERSION = "0.3.0"
 MAX_FINDINGS = 5000
 MAX_HOMES = 256
 MAX_PROCESS_BYTES = 65536
+MAX_HISTORY_BYTES_PER_PROFILE = 268435456
+MAX_HISTORY_ROWS_PER_PROFILE = 1000000
 EXTENSION_ID_RE = re.compile(r"^[a-p]{32}$")
 CATALOG = [
   {
@@ -255,6 +260,296 @@ BROWSER_EXTENSION_CATALOG = [
     "provider_id": "grammarly"
   }
 ]
+DOMAIN_CATALOG = [
+  {
+    "artifact_id": "net-anthropic-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "claude.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "anthropic"
+  },
+  {
+    "artifact_id": "net-anthropic-002",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "anthropic.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "anthropic"
+  },
+  {
+    "artifact_id": "net-character-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "character.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "characterai"
+  },
+  {
+    "artifact_id": "net-codeium-001",
+    "capability": "code_assistant",
+    "confidence": "low",
+    "domain": "codeium.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "codeium"
+  },
+  {
+    "artifact_id": "net-cohere-001",
+    "capability": "model_provider",
+    "confidence": "low",
+    "domain": "cohere.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "cohere"
+  },
+  {
+    "artifact_id": "net-cohere-002",
+    "capability": "model_provider",
+    "confidence": "low",
+    "domain": "cohere.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "cohere"
+  },
+  {
+    "artifact_id": "net-cursor-001",
+    "capability": "code_assistant",
+    "confidence": "low",
+    "domain": "cursor.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "cursor"
+  },
+  {
+    "artifact_id": "net-cursor-002",
+    "capability": "code_assistant",
+    "confidence": "low",
+    "domain": "cursor.sh",
+    "indicator_type": "registered_domain",
+    "provider_id": "cursor"
+  },
+  {
+    "artifact_id": "net-deepseek-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "deepseek.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "deepseek"
+  },
+  {
+    "artifact_id": "net-elevenlabs-001",
+    "capability": "audio_generation",
+    "confidence": "low",
+    "domain": "elevenlabs.io",
+    "indicator_type": "registered_domain",
+    "provider_id": "elevenlabs"
+  },
+  {
+    "artifact_id": "net-github-001",
+    "capability": "code_assistant",
+    "confidence": "low",
+    "domain": "githubcopilot.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "github"
+  },
+  {
+    "artifact_id": "net-google-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "gemini.google.com",
+    "indicator_type": "fqdn",
+    "provider_id": "google"
+  },
+  {
+    "artifact_id": "net-google-002",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "aistudio.google.com",
+    "indicator_type": "fqdn",
+    "provider_id": "google"
+  },
+  {
+    "artifact_id": "net-google-003",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "generativelanguage.googleapis.com",
+    "indicator_type": "fqdn",
+    "provider_id": "google"
+  },
+  {
+    "artifact_id": "net-groq-001",
+    "capability": "model_provider",
+    "confidence": "low",
+    "domain": "groq.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "groq"
+  },
+  {
+    "artifact_id": "net-huggingface-001",
+    "capability": "model_platform",
+    "confidence": "low",
+    "domain": "huggingface.co",
+    "indicator_type": "registered_domain",
+    "provider_id": "huggingface"
+  },
+  {
+    "artifact_id": "net-lmstudio-001",
+    "capability": "local_model_tooling",
+    "confidence": "low",
+    "domain": "lmstudio.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "lmstudio"
+  },
+  {
+    "artifact_id": "net-meta-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "meta.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "meta"
+  },
+  {
+    "artifact_id": "net-microsoft-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "copilot.microsoft.com",
+    "indicator_type": "fqdn",
+    "provider_id": "microsoft"
+  },
+  {
+    "artifact_id": "net-midjourney-001",
+    "capability": "image_generation",
+    "confidence": "low",
+    "domain": "midjourney.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "midjourney"
+  },
+  {
+    "artifact_id": "net-mistral-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "mistral.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "mistral"
+  },
+  {
+    "artifact_id": "net-ollama-001",
+    "capability": "local_model_tooling",
+    "confidence": "low",
+    "domain": "ollama.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "ollama"
+  },
+  {
+    "artifact_id": "net-openai-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "openai.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "openai"
+  },
+  {
+    "artifact_id": "net-openai-002",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "chatgpt.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "openai"
+  },
+  {
+    "artifact_id": "net-openai-003",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "oaiusercontent.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "openai"
+  },
+  {
+    "artifact_id": "net-openrouter-001",
+    "capability": "model_gateway",
+    "confidence": "low",
+    "domain": "openrouter.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "openrouter"
+  },
+  {
+    "artifact_id": "net-perplexity-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "perplexity.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "perplexity"
+  },
+  {
+    "artifact_id": "net-poe-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "poe.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "poe"
+  },
+  {
+    "artifact_id": "net-replicate-001",
+    "capability": "model_platform",
+    "confidence": "low",
+    "domain": "replicate.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "replicate"
+  },
+  {
+    "artifact_id": "net-runway-001",
+    "capability": "video_generation",
+    "confidence": "low",
+    "domain": "runwayml.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "runway"
+  },
+  {
+    "artifact_id": "net-stability-001",
+    "capability": "image_generation",
+    "confidence": "low",
+    "domain": "stability.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "stability"
+  },
+  {
+    "artifact_id": "net-together-001",
+    "capability": "model_provider",
+    "confidence": "low",
+    "domain": "together.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "together"
+  },
+  {
+    "artifact_id": "net-together-002",
+    "capability": "model_provider",
+    "confidence": "low",
+    "domain": "together.xyz",
+    "indicator_type": "registered_domain",
+    "provider_id": "together"
+  },
+  {
+    "artifact_id": "net-windsurf-001",
+    "capability": "code_assistant",
+    "confidence": "low",
+    "domain": "windsurf.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "windsurf"
+  },
+  {
+    "artifact_id": "net-xai-001",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "x.ai",
+    "indicator_type": "registered_domain",
+    "provider_id": "xai"
+  },
+  {
+    "artifact_id": "net-xai-002",
+    "capability": "generative_ai",
+    "confidence": "low",
+    "domain": "grok.com",
+    "indicator_type": "registered_domain",
+    "provider_id": "xai"
+  }
+]
 
 
 def now() -> str:
@@ -278,7 +573,7 @@ def new_document() -> dict[str, object]:
             "os_version": platform.platform(),
             "architecture": platform.machine(),
         },
-        "scope": ["processes", "known_paths", "browser_extensions", "installed_software"],
+        "scope": ["processes", "known_paths", "browser_extensions", "browser_history", "installed_software"],
         "safety": {
             "content_collected": False,
             "raw_command_line_collected": False,
@@ -319,7 +614,7 @@ def add_finding(
             "provider_id": indicator["provider_id"],
             "capability": indicator["capability"],
             "confidence": indicator["confidence"],
-            "evidence_level": 3 if category == "process" else 2,
+            "evidence_level": 3 if category == "process" else 1 if category == "browser_history" else 2,
             "subject_user": subject_user,
             "attributes": attributes,
         }
@@ -532,6 +827,106 @@ def collect_browser_extensions(document: dict[str, object], homes: list[tuple[st
                 record_error(document, f"browser_inventory_{browser}", exc)
 
 
+def history_indicator(hostname: str) -> dict[str, str] | None:
+    host = hostname.casefold().rstrip(".")
+    for item in DOMAIN_CATALOG:
+        domain = item["domain"].casefold()
+        if item["indicator_type"] == "fqdn":
+            matched = host == domain
+        else:
+            matched = host == domain or host.endswith("." + domain)
+        if matched:
+            return item
+    return None
+
+
+def collect_history_database(
+    document: dict[str, object],
+    path: Path,
+    browser: str,
+    profile: str,
+    user: str,
+) -> None:
+    if path.stat().st_size > MAX_HISTORY_BYTES_PER_PROFILE:
+        record_error(document, f"browser_history_{browser}", ValueError("history_size_limit"))
+        return
+    found: dict[str, dict[str, str]] = {}
+    connection: sqlite3.Connection | None = None
+    try:
+        connection = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=2)
+        cursor = connection.execute(
+            "SELECT url FROM urls WHERE url IS NOT NULL LIMIT ?",
+            (MAX_HISTORY_ROWS_PER_PROFILE,),
+        )
+        for (raw_url,) in cursor:
+            if not isinstance(raw_url, str):
+                continue
+            indicator = history_indicator(urlsplit(raw_url).hostname or "")
+            if indicator is not None:
+                found[indicator["artifact_id"]] = indicator
+    except (OSError, sqlite3.Error, ValueError) as exc:
+        record_error(document, f"browser_history_{browser}", exc)
+        return
+    finally:
+        if connection is not None:
+            connection.close()
+    for indicator in found.values():
+        add_finding(
+            document,
+            "browser_history",
+            indicator,
+            user,
+            browser=browser,
+            profile=profile,
+            matched_domain=indicator["domain"],
+            match_basis="history_database_hostname_match_local_only",
+            presence_only=True,
+        )
+
+
+def collect_browser_history(document: dict[str, object], homes: list[tuple[str, Path]]) -> None:
+    chromium_roots = {
+        "macos": [
+            ("chrome", Path("Library/Application Support/Google/Chrome")),
+            ("edge", Path("Library/Application Support/Microsoft Edge")),
+            ("brave", Path("Library/Application Support/BraveSoftware/Brave-Browser")),
+        ],
+        "linux": [
+            ("chrome", Path(".config/google-chrome")),
+            ("chromium", Path(".config/chromium")),
+            ("edge", Path(".config/microsoft-edge")),
+            ("brave", Path(".config/BraveSoftware/Brave-Browser")),
+        ],
+    }
+    firefox_roots = {
+        "macos": Path("Library/Application Support/Firefox/Profiles"),
+        "linux": Path(".mozilla/firefox"),
+    }
+    for user, home in homes:
+        for browser, relative_root in chromium_roots.get(os_family(), []):
+            root = home / relative_root
+            try:
+                if not safe_exists(root):
+                    continue
+                profiles = [item for item in root.iterdir() if safe_exists(item) and item.is_dir()]
+                for browser_profile in sorted(profiles, key=lambda item: item.name.casefold())[:128]:
+                    history_path = browser_profile / "History"
+                    if safe_exists(history_path):
+                        collect_history_database(document, history_path, browser, browser_profile.name, user)
+            except OSError as exc:
+                record_error(document, f"browser_history_{browser}", exc)
+        firefox_root = home / firefox_roots[os_family()]
+        try:
+            if safe_exists(firefox_root):
+                profiles = [item for item in firefox_root.iterdir() if safe_exists(item) and item.is_dir()]
+                for browser_profile in sorted(profiles, key=lambda item: item.name.casefold())[:128]:
+                    history_path = browser_profile / "places.sqlite"
+                    if safe_exists(history_path):
+                        collect_history_database(document, history_path, "firefox", browser_profile.name, user)
+        except OSError as exc:
+            record_error(document, "browser_history_firefox", exc)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--self-test", action="store_true", help="emit an empty conformant document without scanning")
@@ -545,6 +940,7 @@ def main() -> int:
             collect_processes(document)
             collect_known_paths(document, homes)
             collect_browser_extensions(document, homes)
+            collect_browser_history(document, homes)
     print(json.dumps(document, separators=(",", ":"), sort_keys=True))
     collector = document["collector"]
     assert isinstance(collector, dict)
