@@ -22,7 +22,7 @@ param([switch]$SelfTest)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $CollectorName = 'shadow-ai-rmm-windows'
-$CollectorVersion = '0.5.2'
+$CollectorVersion = '0.6.0'
 $MaxFindings = 5000
 $ExtensionIdPattern = '^[a-p]{32}$'
 $CatalogJson = @'
@@ -575,6 +575,51 @@ function Find-ExtensionNameClassification {
     return $null
 }
 
+function Find-ManifestDomainClassification {
+    param([Parameter(Mandatory = $true)][string]$ExtensionPath)
+    try {
+        foreach ($versionDirectory in @(Get-ChildItem -LiteralPath $ExtensionPath -Directory -Force -ErrorAction Stop |
+            Where-Object { ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 } |
+            Sort-Object -Property Name -Descending | Select-Object -First 8)) {
+            $manifest = Read-BoundedJsonObject -LiteralPath (Join-Path -Path $versionDirectory.FullName -ChildPath 'manifest.json')
+            if ($null -eq $manifest) { continue }
+            $accessValues = @()
+            foreach ($propertyName in @('permissions', 'host_permissions', 'optional_host_permissions')) {
+                foreach ($value in @((Get-OptionalPropertyValue -InputObject $manifest -Name $propertyName))) {
+                    if ($value -is [string]) { $accessValues += $value }
+                }
+            }
+            foreach ($contentScript in @((Get-OptionalPropertyValue -InputObject $manifest -Name 'content_scripts'))) {
+                if ($null -eq $contentScript) { continue }
+                foreach ($value in @((Get-OptionalPropertyValue -InputObject $contentScript -Name 'matches'))) {
+                    if ($value -is [string]) { $accessValues += $value }
+                }
+            }
+            $externallyConnectable = Get-OptionalPropertyValue -InputObject $manifest -Name 'externally_connectable'
+            if ($null -ne $externallyConnectable) {
+                foreach ($value in @((Get-OptionalPropertyValue -InputObject $externallyConnectable -Name 'matches'))) {
+                    if ($value -is [string]) { $accessValues += $value }
+                }
+            }
+            foreach ($indicator in $DomainCatalog) {
+                $escapedDomain = [Regex]::Escape(([string]$indicator.domain).ToLowerInvariant())
+                $hostPattern = if ($indicator.indicator_type -eq 'registered_domain') {
+                    '(?:[a-z0-9-]+\.)*' + $escapedDomain
+                } else {
+                    $escapedDomain
+                }
+                $domainRegex = [Regex]::new('(?i)(?:^|[/:*.])' + $hostPattern + '(?:[/:*]|$)', [Text.RegularExpressions.RegexOptions]::CultureInvariant)
+                foreach ($value in $accessValues) {
+                    if ($domainRegex.IsMatch([string]$value)) { return $indicator }
+                }
+            }
+        }
+    } catch {
+        return $null
+    }
+    return $null
+}
+
 function Add-ExtensionInventorySummary {
     param(
         [Parameter(Mandatory = $true)][string]$Browser,
@@ -639,6 +684,20 @@ function Collect-ChromiumExtensionProfile {
                 extension_id = $extension.Name
                 extension_name = $resolvedName
                 classification_basis = 'manifest_name_local_only'
+                presence_only = $true
+            }
+            $classifiedCount += 1
+            continue
+        }
+        $domainClassification = Find-ManifestDomainClassification -ExtensionPath $extension.FullName
+        if ($null -ne $domainClassification) {
+            $indicator = New-SyntheticIndicator ('browser-' + $extension.Name) $domainClassification.provider_id 'ai_browser_extension' 'medium'
+            Add-Finding -Category 'browser_extension' -Indicator $indicator -SubjectUser $SubjectUser -Attributes @{
+                browser = $Browser
+                profile = $BrowserProfile.Name
+                extension_id = $extension.Name
+                matched_domain = [string]$domainClassification.domain
+                classification_basis = 'manifest_domain_local_only'
                 presence_only = $true
             }
             $classifiedCount += 1
