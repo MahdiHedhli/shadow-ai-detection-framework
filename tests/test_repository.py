@@ -388,6 +388,39 @@ class RepositoryTests(unittest.TestCase):
             self.assertEqual(inventory["attributes"]["installed_extension_count"], 1)
             self.assertEqual(inventory["attributes"]["classified_extension_count"], 1)
 
+    def test_python_extension_inventory_classifies_preference_manifests_locally(self) -> None:
+        collector = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"
+        spec = importlib.util.spec_from_file_location("shadow_ai_preference_manifest", collector)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as temporary:
+            profile = Path(temporary) / "Default"
+            profile.mkdir(parents=True)
+            extension_id = "c" * 32
+            (profile / "Secure Preferences").write_text(
+                json.dumps(
+                    {
+                        "extensions": {
+                            "settings": {
+                                extension_id: {"manifest": {"name": "Claude helper for the browser"}}
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            document = module.new_document()
+            module.collect_chromium_extension_profile(document, "chrome", profile, "tester", {})
+            classified = next(
+                item for item in document["findings"] if item["capability"] == "ai_browser_extension"
+            )
+            self.assertEqual(classified["provider_id"], "anthropic")
+            self.assertEqual(
+                classified["attributes"]["classification_basis"],
+                "browser_preferences_manifest_name_local_only",
+            )
+
     def test_python_firefox_extension_inventory_and_classification(self) -> None:
         collector = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"
         spec = importlib.util.spec_from_file_location("shadow_ai_firefox_inventory", collector)
