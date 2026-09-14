@@ -22,7 +22,7 @@ param([switch]$SelfTest)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $CollectorName = 'shadow-ai-rmm-windows'
-$CollectorVersion = '0.4.0'
+$CollectorVersion = '0.5.0'
 $MaxFindings = 5000
 $ExtensionIdPattern = '^[a-p]{32}$'
 $CatalogJson = @'
@@ -575,6 +575,115 @@ function Find-ExtensionNameClassification {
     return $null
 }
 
+function Add-ExtensionInventorySummary {
+    param(
+        [Parameter(Mandatory = $true)][string]$Browser,
+        [Parameter(Mandatory = $true)][string]$BrowserProfile,
+        [AllowNull()][string]$SubjectUser,
+        [Parameter(Mandatory = $true)][int]$InstalledCount,
+        [Parameter(Mandatory = $true)][int]$ClassifiedCount
+    )
+    if ($InstalledCount -le 0) { return }
+    $indicator = New-SyntheticIndicator 'browser-extension-inventory' 'generic' 'browser_extension_inventory' 'low'
+    Add-Finding -Category 'browser_extension' -Indicator $indicator -SubjectUser $SubjectUser -Attributes @{
+        browser = $Browser
+        profile = $BrowserProfile
+        installed_extension_count = $InstalledCount
+        classified_extension_count = $ClassifiedCount
+        reporting_scope = 'count_only'
+        presence_only = $true
+    }
+}
+
+function Collect-ChromiumExtensionProfile {
+    param(
+        [Parameter(Mandatory = $true)][string]$Browser,
+        [Parameter(Mandatory = $true)]$BrowserProfile,
+        [AllowNull()][string]$SubjectUser,
+        [Parameter(Mandatory = $true)][hashtable]$KnownExtensions
+    )
+    $extensionRoot = Join-Path -Path $BrowserProfile.FullName -ChildPath 'Extensions'
+    if (-not (Test-SafePath -LiteralPath $extensionRoot)) { return }
+    $installedCount = 0
+    $classifiedCount = 0
+    foreach ($extension in @(Get-ChildItem -LiteralPath $extensionRoot -Directory -Force -ErrorAction Stop | Select-Object -First 1000)) {
+        if (
+            $extension.Name -notmatch $ExtensionIdPattern -or
+            (($extension.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)
+        ) { continue }
+        $installedCount += 1
+        $known = $KnownExtensions[[string]$extension.Name]
+        if (
+            $null -ne $known -and
+            $known.browser -in @($Browser, 'chromium-family')
+        ) {
+            $indicator = New-SyntheticIndicator ('browser-' + $extension.Name) $known.provider_id 'ai_browser_extension' 'high'
+            Add-Finding -Category 'browser_extension' -Indicator $indicator -SubjectUser $SubjectUser -Attributes @{
+                browser = $Browser
+                profile = $BrowserProfile.Name
+                extension_id = $extension.Name
+                extension_name = $known.extension_name
+                classification_basis = 'catalog_id'
+                presence_only = $true
+            }
+            $classifiedCount += 1
+            continue
+        }
+        $resolvedName = Resolve-ChromiumExtensionName -ExtensionPath $extension.FullName
+        $classification = Find-ExtensionNameClassification -ExtensionName $resolvedName
+        if ($null -ne $classification) {
+            $indicator = New-SyntheticIndicator ('browser-' + $extension.Name) $classification.provider_id 'ai_browser_extension' $classification.confidence
+            Add-Finding -Category 'browser_extension' -Indicator $indicator -SubjectUser $SubjectUser -Attributes @{
+                browser = $Browser
+                profile = $BrowserProfile.Name
+                extension_id = $extension.Name
+                extension_name = $resolvedName
+                classification_basis = 'manifest_name_local_only'
+                presence_only = $true
+            }
+            $classifiedCount += 1
+        }
+    }
+    Add-ExtensionInventorySummary -Browser $Browser -BrowserProfile $BrowserProfile.Name -SubjectUser $SubjectUser -InstalledCount $installedCount -ClassifiedCount $classifiedCount
+}
+
+function Collect-FirefoxExtensionProfile {
+    param(
+        [Parameter(Mandatory = $true)]$BrowserProfile,
+        [AllowNull()][string]$SubjectUser
+    )
+    $extensionDocument = Read-BoundedJsonObject -LiteralPath (Join-Path -Path $BrowserProfile.FullName -ChildPath 'extensions.json')
+    if ($null -eq $extensionDocument) { return }
+    $installedCount = 0
+    $classifiedCount = 0
+    foreach ($addon in @((Get-OptionalPropertyValue -InputObject $extensionDocument -Name 'addons'))) {
+        if ($null -eq $addon) { continue }
+        if (-not ([string](Get-OptionalPropertyValue -InputObject $addon -Name 'type')).Equals('extension', [StringComparison]::OrdinalIgnoreCase)) { continue }
+        if ((Get-OptionalPropertyValue -InputObject $addon -Name 'isSystem') -eq $true) { continue }
+        $installedCount += 1
+        $extensionName = Get-SafeExtensionName -Value ([string](Get-OptionalPropertyValue -InputObject $addon -Name 'name'))
+        $defaultLocale = Get-OptionalPropertyValue -InputObject $addon -Name 'defaultLocale'
+        if ($null -ne $defaultLocale) {
+            $localizedName = Get-SafeExtensionName -Value ([string](Get-OptionalPropertyValue -InputObject $defaultLocale -Name 'name'))
+            if ($null -ne $localizedName) { $extensionName = $localizedName }
+        }
+        $classification = Find-ExtensionNameClassification -ExtensionName $extensionName
+        if ($null -eq $classification) { continue }
+        $extensionId = Get-SafeExtensionName -Value ([string](Get-OptionalPropertyValue -InputObject $addon -Name 'id'))
+        $indicator = New-SyntheticIndicator 'browser-firefox-name' $classification.provider_id 'ai_browser_extension' $classification.confidence
+        Add-Finding -Category 'browser_extension' -Indicator $indicator -SubjectUser $SubjectUser -Attributes @{
+            browser = 'firefox'
+            profile = $BrowserProfile.Name
+            extension_id = $extensionId
+            extension_name = $extensionName
+            classification_basis = 'extensions_json_name_local_only'
+            presence_only = $true
+        }
+        $classifiedCount += 1
+    }
+    Add-ExtensionInventorySummary -Browser 'firefox' -BrowserProfile $BrowserProfile.Name -SubjectUser $SubjectUser -InstalledCount $installedCount -ClassifiedCount $classifiedCount
+}
+
 function Collect-BrowserExtensions {
     param([AllowEmptyCollection()][object[]]$Profiles)
     $knownExtensions = @{}
@@ -582,7 +691,11 @@ function Collect-BrowserExtensions {
     $browserRoots = @(
         [pscustomobject]@{ Browser = 'chrome'; Relative = 'AppData\Local\Google\Chrome\User Data' },
         [pscustomobject]@{ Browser = 'edge'; Relative = 'AppData\Local\Microsoft\Edge\User Data' },
-        [pscustomobject]@{ Browser = 'brave'; Relative = 'AppData\Local\BraveSoftware\Brave-Browser\User Data' }
+        [pscustomobject]@{ Browser = 'brave'; Relative = 'AppData\Local\BraveSoftware\Brave-Browser\User Data' },
+        [pscustomobject]@{ Browser = 'chromium'; Relative = 'AppData\Local\Chromium\User Data' },
+        [pscustomobject]@{ Browser = 'vivaldi'; Relative = 'AppData\Local\Vivaldi\User Data' },
+        [pscustomobject]@{ Browser = 'arc'; Relative = 'AppData\Local\Packages\TheBrowserCompany.Arc_ttt1ap7aakyb4\LocalCache\Local\Arc\User Data' },
+        [pscustomobject]@{ Browser = 'opera'; Relative = 'AppData\Roaming\Opera Software' }
     )
     foreach ($profile in $Profiles) {
         foreach ($browser in $browserRoots) {
@@ -591,46 +704,21 @@ function Collect-BrowserExtensions {
             try {
                 foreach ($browserProfile in @(Get-ChildItem -LiteralPath $root -Directory -Force -ErrorAction Stop | Select-Object -First 128)) {
                     if (($browserProfile.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
-                    $extensionRoot = Join-Path -Path $browserProfile.FullName -ChildPath 'Extensions'
-                    if (-not (Test-SafePath -LiteralPath $extensionRoot)) { continue }
-                    foreach ($extension in @(Get-ChildItem -LiteralPath $extensionRoot -Directory -Force -ErrorAction Stop | Select-Object -First 1000)) {
-                        if (
-                            $extension.Name -notmatch $ExtensionIdPattern -or
-                            (($extension.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)
-                        ) { continue }
-                        $known = $knownExtensions[[string]$extension.Name]
-                        if (
-                            $null -ne $known -and
-                            $known.browser -in @($browser.Browser, 'chromium-family')
-                        ) {
-                            $indicator = New-SyntheticIndicator ('browser-' + $extension.Name) $known.provider_id 'ai_browser_extension' 'high'
-                            Add-Finding -Category 'browser_extension' -Indicator $indicator -SubjectUser $profile.User -Attributes @{
-                                browser = $browser.Browser
-                                profile = $browserProfile.Name
-                                extension_id = $extension.Name
-                                extension_name = $known.extension_name
-                                classification_basis = 'catalog_id'
-                                presence_only = $true
-                            }
-                            continue
-                        }
-                        $resolvedName = Resolve-ChromiumExtensionName -ExtensionPath $extension.FullName
-                        $classification = Find-ExtensionNameClassification -ExtensionName $resolvedName
-                        if ($null -ne $classification) {
-                            $indicator = New-SyntheticIndicator ('browser-' + $extension.Name) $classification.provider_id 'ai_browser_extension' $classification.confidence
-                            Add-Finding -Category 'browser_extension' -Indicator $indicator -SubjectUser $profile.User -Attributes @{
-                                browser = $browser.Browser
-                                profile = $browserProfile.Name
-                                extension_id = $extension.Name
-                                extension_name = $resolvedName
-                                classification_basis = 'manifest_name_local_only'
-                                presence_only = $true
-                            }
-                        }
-                    }
+                    Collect-ChromiumExtensionProfile -Browser $browser.Browser -BrowserProfile $browserProfile -SubjectUser $profile.User -KnownExtensions $knownExtensions
                 }
             } catch {
                 Add-PartialError -Operation ('browser_inventory_' + $browser.Browser) -Exception $_.Exception
+            }
+        }
+        $firefoxRoot = Join-Path -Path $profile.Home -ChildPath 'AppData\Roaming\Mozilla\Firefox\Profiles'
+        if (Test-SafePath -LiteralPath $firefoxRoot) {
+            try {
+                foreach ($browserProfile in @(Get-ChildItem -LiteralPath $firefoxRoot -Directory -Force -ErrorAction Stop | Select-Object -First 128)) {
+                    if (($browserProfile.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
+                    Collect-FirefoxExtensionProfile -BrowserProfile $browserProfile -SubjectUser $profile.User
+                }
+            } catch {
+                Add-PartialError -Operation 'browser_inventory_firefox' -Exception $_.Exception
             }
         }
     }

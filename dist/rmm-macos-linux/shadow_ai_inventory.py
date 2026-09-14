@@ -25,7 +25,7 @@ from urllib.parse import urlsplit
 
 
 COLLECTOR_NAME = "shadow-ai-rmm-macos-linux"
-COLLECTOR_VERSION = "0.4.0"
+COLLECTOR_VERSION = "0.5.0"
 MAX_FINDINGS = 5000
 MAX_HOMES = 256
 MAX_PROCESS_BYTES = 65536
@@ -982,76 +982,177 @@ def extension_name_classification(extension_name: str | None) -> dict[str, str] 
     )
 
 
+def add_extension_inventory_summary(
+    document: dict[str, object],
+    browser: str,
+    profile: str,
+    user: str,
+    installed_count: int,
+    classified_count: int,
+) -> None:
+    if installed_count <= 0:
+        return
+    add_finding(
+        document,
+        "browser_extension",
+        synthetic("browser-extension-inventory", "generic", "browser_extension_inventory", "low"),
+        user,
+        browser=browser,
+        profile=profile,
+        installed_extension_count=installed_count,
+        classified_extension_count=classified_count,
+        reporting_scope="count_only",
+        presence_only=True,
+    )
+
+
+def collect_chromium_extension_profile(
+    document: dict[str, object],
+    browser: str,
+    profile: Path,
+    user: str,
+    known_extensions: dict[str, dict[str, str]],
+) -> None:
+    extension_root = profile / "Extensions"
+    if not safe_exists(extension_root):
+        return
+    installed_count = 0
+    classified_count = 0
+    for extension in sorted(extension_root.iterdir(), key=lambda item: item.name)[:1000]:
+        if not (EXTENSION_ID_RE.fullmatch(extension.name) and safe_exists(extension) and extension.is_dir()):
+            continue
+        installed_count += 1
+        catalog_item = known_extensions.get(extension.name)
+        extension_name: str | None = None
+        provider_id: str | None = None
+        confidence = "medium"
+        classification_basis = "manifest_name_local_only"
+        if catalog_item and catalog_item["browser"] in {browser, "chromium-family"}:
+            extension_name = catalog_item["extension_name"]
+            provider_id = catalog_item["provider_id"]
+            confidence = "high"
+            classification_basis = "catalog_id"
+        else:
+            extension_name = resolve_chromium_extension_name(extension)
+            classification = extension_name_classification(extension_name)
+            if classification:
+                provider_id = classification["provider_id"]
+                confidence = classification["confidence"]
+        if provider_id is None or extension_name is None:
+            continue
+        add_finding(
+            document,
+            "browser_extension",
+            synthetic("browser-" + extension.name, provider_id, "ai_browser_extension", confidence),
+            user,
+            browser=browser,
+            profile=profile.name,
+            extension_id=extension.name,
+            extension_name=extension_name,
+            classification_basis=classification_basis,
+            presence_only=True,
+        )
+        classified_count += 1
+    add_extension_inventory_summary(
+        document, browser, profile.name, user, installed_count, classified_count
+    )
+
+
+def collect_firefox_extension_profile(
+    document: dict[str, object], profile: Path, user: str
+) -> None:
+    extension_document = read_bounded_json(profile / "extensions.json")
+    if not isinstance(extension_document, dict):
+        return
+    addons = extension_document.get("addons")
+    if not isinstance(addons, list):
+        return
+    installed_count = 0
+    classified_count = 0
+    for addon in addons[:1000]:
+        if not isinstance(addon, dict) or str(addon.get("type", "")).casefold() != "extension":
+            continue
+        if addon.get("isSystem") is True:
+            continue
+        installed_count += 1
+        extension_name = safe_extension_name(addon.get("name"))
+        default_locale = addon.get("defaultLocale")
+        if isinstance(default_locale, dict):
+            extension_name = safe_extension_name(default_locale.get("name")) or extension_name
+        classification = extension_name_classification(extension_name)
+        if classification is None or extension_name is None:
+            continue
+        add_finding(
+            document,
+            "browser_extension",
+            synthetic(
+                "browser-firefox-name",
+                classification["provider_id"],
+                "ai_browser_extension",
+                classification["confidence"],
+            ),
+            user,
+            browser="firefox",
+            profile=profile.name,
+            extension_id=safe_extension_name(addon.get("id")),
+            extension_name=extension_name,
+            classification_basis="extensions_json_name_local_only",
+            presence_only=True,
+        )
+        classified_count += 1
+    add_extension_inventory_summary(
+        document, "firefox", profile.name, user, installed_count, classified_count
+    )
+
+
 def collect_browser_extensions(document: dict[str, object], homes: list[tuple[str, Path]]) -> None:
     known_extensions = {item["extension_id"]: item for item in BROWSER_EXTENSION_CATALOG}
     roots_by_family = {
         "macos": [
-            ("chrome", Path("Library/Application Support/Google/Chrome")),
-            ("edge", Path("Library/Application Support/Microsoft Edge")),
-            ("brave", Path("Library/Application Support/BraveSoftware/Brave-Browser")),
+            ("chrome", Path("Library/Application Support/Google/Chrome"), False),
+            ("edge", Path("Library/Application Support/Microsoft Edge"), False),
+            ("brave", Path("Library/Application Support/BraveSoftware/Brave-Browser"), False),
+            ("chromium", Path("Library/Application Support/Chromium"), False),
+            ("vivaldi", Path("Library/Application Support/Vivaldi"), False),
+            ("arc", Path("Library/Application Support/Arc/User Data"), False),
+            ("opera", Path("Library/Application Support/com.operasoftware.Opera"), True),
         ],
         "linux": [
-            ("chrome", Path(".config/google-chrome")),
-            ("chromium", Path(".config/chromium")),
-            ("edge", Path(".config/microsoft-edge")),
-            ("brave", Path(".config/BraveSoftware/Brave-Browser")),
+            ("chrome", Path(".config/google-chrome"), False),
+            ("chromium", Path(".config/chromium"), False),
+            ("edge", Path(".config/microsoft-edge"), False),
+            ("brave", Path(".config/BraveSoftware/Brave-Browser"), False),
+            ("vivaldi", Path(".config/vivaldi"), False),
+            ("opera", Path(".config/opera"), True),
         ],
     }
+    firefox_roots = {
+        "macos": Path("Library/Application Support/Firefox/Profiles"),
+        "linux": Path(".mozilla/firefox"),
+    }
     for user, home in homes:
-        for browser, relative_root in roots_by_family.get(os_family(), []):
+        for browser, relative_root, root_is_profile in roots_by_family.get(os_family(), []):
             root = home / relative_root
             try:
                 if not safe_exists(root):
                     continue
-                profiles = [item for item in root.iterdir() if safe_exists(item) and item.is_dir()]
+                profiles = [root] if root_is_profile else [
+                    item for item in root.iterdir() if safe_exists(item) and item.is_dir()
+                ]
                 for profile in sorted(profiles, key=lambda item: item.name.casefold())[:128]:
-                    extension_root = profile / "Extensions"
-                    if not safe_exists(extension_root):
-                        continue
-                    for extension in sorted(extension_root.iterdir(), key=lambda item: item.name)[:1000]:
-                        catalog_item = known_extensions.get(extension.name)
-                        if (
-                            EXTENSION_ID_RE.fullmatch(extension.name)
-                            and safe_exists(extension)
-                            and extension.is_dir()
-                        ):
-                            extension_name: str | None = None
-                            provider_id: str | None = None
-                            confidence = "medium"
-                            classification_basis = "manifest_name_local_only"
-                            if catalog_item and catalog_item["browser"] in {browser, "chromium-family"}:
-                                extension_name = catalog_item["extension_name"]
-                                provider_id = catalog_item["provider_id"]
-                                confidence = "high"
-                                classification_basis = "catalog_id"
-                            else:
-                                extension_name = resolve_chromium_extension_name(extension)
-                                classification = extension_name_classification(extension_name)
-                                if classification:
-                                    provider_id = classification["provider_id"]
-                                    confidence = classification["confidence"]
-                            if provider_id is None or extension_name is None:
-                                continue
-                            indicator = synthetic(
-                                "browser-" + extension.name,
-                                provider_id,
-                                "ai_browser_extension",
-                                confidence,
-                            )
-                            add_finding(
-                                document,
-                                "browser_extension",
-                                indicator,
-                                user,
-                                browser=browser,
-                                profile=profile.name,
-                                extension_id=extension.name,
-                                extension_name=extension_name,
-                                classification_basis=classification_basis,
-                                presence_only=True,
-                            )
+                    collect_chromium_extension_profile(
+                        document, browser, profile, user, known_extensions
+                    )
             except OSError as exc:
                 record_error(document, f"browser_inventory_{browser}", exc)
+        firefox_root = home / firefox_roots[os_family()]
+        try:
+            if safe_exists(firefox_root):
+                profiles = [item for item in firefox_root.iterdir() if safe_exists(item) and item.is_dir()]
+                for profile in sorted(profiles, key=lambda item: item.name.casefold())[:128]:
+                    collect_firefox_extension_profile(document, profile, user)
+        except OSError as exc:
+            record_error(document, "browser_inventory_firefox", exc)
 
 
 def history_indicator(hostname: str) -> dict[str, str] | None:
