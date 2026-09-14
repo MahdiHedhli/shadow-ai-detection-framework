@@ -741,22 +741,24 @@ function Get-UserProfiles {
 
 function Collect-KnownPaths {
     param([AllowEmptyCollection()][object[]]$Profiles)
-    $modelIndicator = $Catalog | Where-Object { $_.artifact_id -eq 'file-model-001' } | Select-Object -First 1
-    $mcp = @{}
-    foreach ($item in @($Catalog | Where-Object { $_.artifact_type -eq 'config_file' })) {
-        $mcp[[string]$item.pattern.ToLowerInvariant()] = $item
-    }
+    # These bounded path probes have fixed semantics. Constructing their
+    # indicators directly avoids a runtime catalog lookup becoming null while
+    # preserving the stable catalog IDs used by downstream analytics.
+    $modelIndicator = New-SyntheticIndicator 'file-model-001' 'generic' 'model_weight' 'high'
+    $mcpIndicator = New-SyntheticIndicator 'file-mcp-001' 'mcp' 'mcp_configuration' 'medium'
+    $claudeMcpIndicator = New-SyntheticIndicator 'file-mcp-002' 'mcp' 'mcp_configuration' 'high'
+    $dotMcpIndicator = New-SyntheticIndicator 'file-mcp-003' 'mcp' 'mcp_configuration' 'medium'
     $relativePaths = @(
         [pscustomobject]@{ Relative = '.ollama\models'; Category = 'model_directory'; Indicator = $modelIndicator },
         [pscustomobject]@{ Relative = '.cache\lm-studio\models'; Category = 'model_directory'; Indicator = $modelIndicator },
         [pscustomobject]@{ Relative = '.lmstudio\models'; Category = 'model_directory'; Indicator = $modelIndicator },
-        [pscustomobject]@{ Relative = '.cursor\mcp.json'; Category = 'config_file'; Indicator = $mcp['mcp.json'] },
-        [pscustomobject]@{ Relative = '.mcp.json'; Category = 'config_file'; Indicator = $mcp['.mcp.json'] },
-        [pscustomobject]@{ Relative = 'AppData\Roaming\Claude\claude_desktop_config.json'; Category = 'config_file'; Indicator = $mcp['claude_desktop_config.json'] },
-        [pscustomobject]@{ Relative = 'AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json'; Category = 'config_file'; Indicator = $mcp['claude_desktop_config.json'] },
-        [pscustomobject]@{ Relative = 'AppData\Roaming\Cursor\User\globalStorage\mcp.json'; Category = 'config_file'; Indicator = $mcp['mcp.json'] },
-        [pscustomobject]@{ Relative = 'AppData\Roaming\Code\User\mcp.json'; Category = 'config_file'; Indicator = $mcp['mcp.json'] },
-        [pscustomobject]@{ Relative = 'AppData\Roaming\Code - Insiders\User\mcp.json'; Category = 'config_file'; Indicator = $mcp['mcp.json'] },
+        [pscustomobject]@{ Relative = '.cursor\mcp.json'; Category = 'config_file'; Indicator = $mcpIndicator },
+        [pscustomobject]@{ Relative = '.mcp.json'; Category = 'config_file'; Indicator = $dotMcpIndicator },
+        [pscustomobject]@{ Relative = 'AppData\Roaming\Claude\claude_desktop_config.json'; Category = 'config_file'; Indicator = $claudeMcpIndicator },
+        [pscustomobject]@{ Relative = 'AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json'; Category = 'config_file'; Indicator = $claudeMcpIndicator },
+        [pscustomobject]@{ Relative = 'AppData\Roaming\Cursor\User\globalStorage\mcp.json'; Category = 'config_file'; Indicator = $mcpIndicator },
+        [pscustomobject]@{ Relative = 'AppData\Roaming\Code\User\mcp.json'; Category = 'config_file'; Indicator = $mcpIndicator },
+        [pscustomobject]@{ Relative = 'AppData\Roaming\Code - Insiders\User\mcp.json'; Category = 'config_file'; Indicator = $mcpIndicator },
         [pscustomobject]@{ Relative = 'AppData\Local\LM Studio\models'; Category = 'model_directory'; Indicator = $modelIndicator }
     )
     foreach ($profile in $Profiles) {
