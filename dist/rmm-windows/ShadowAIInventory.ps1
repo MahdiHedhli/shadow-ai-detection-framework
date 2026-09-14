@@ -22,7 +22,7 @@ param([switch]$SelfTest)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $CollectorName = 'shadow-ai-rmm-windows'
-$CollectorVersion = '0.6.4'
+$CollectorVersion = '0.6.5'
 $MaxFindings = 5000
 $ExtensionIdPattern = '^[a-p]{32}$'
 $CatalogJson = @'
@@ -229,7 +229,6 @@ $CatalogJson = @'
   }
 ]
 '@
-$Catalog = @($CatalogJson | ConvertFrom-Json)
 $BrowserCatalogJson = @'
 [
   {
@@ -276,7 +275,6 @@ $BrowserCatalogJson = @'
   }
 ]
 '@
-$BrowserExtensionCatalog = @($BrowserCatalogJson | ConvertFrom-Json)
 $BrowserNameCatalogJson = @'
 [
   {
@@ -431,7 +429,6 @@ $BrowserNameCatalogJson = @'
   }
 ]
 '@
-$BrowserExtensionNameCatalog = @($BrowserNameCatalogJson | ConvertFrom-Json)
 $DomainCatalogJson = @'
 [
   {
@@ -724,10 +721,45 @@ $DomainCatalogJson = @'
   }
 ]
 '@
-$DomainCatalog = @($DomainCatalogJson | ConvertFrom-Json)
+$Catalog = @()
+$BrowserExtensionCatalog = @()
+$BrowserExtensionNameCatalog = @()
+$DomainCatalog = @()
 $MaxHistoryBytesPerProfile = 268435456
 $MaxManifestBytes = 1048576
 $MaxBrowserPreferenceBytes = 16777216
+
+function ConvertFrom-EmbeddedJsonArray {
+    param([Parameter(Mandatory = $true)][string]$Json)
+    # Windows PowerShell 5.1 emits a top-level JSON array as one non-enumerated
+    # Object[] when ConvertFrom-Json is used directly in @(...). Assign first,
+    # then deliberately enumerate so callers receive the catalog rows.
+    $parsed = ConvertFrom-Json -InputObject $Json -ErrorAction Stop
+    if ($null -eq $parsed) { return @() }
+    return @($parsed | ForEach-Object { $_ })
+}
+
+function Assert-EmbeddedCatalogHealth {
+    $checks = @(
+        [pscustomobject]@{ Name = 'endpoint'; Items = $Catalog; Key = 'artifact_id'; Required = @('proc-ollama-001') },
+        [pscustomobject]@{ Name = 'browser_extension'; Items = $BrowserExtensionCatalog; Key = 'extension_id'; Required = @('fcoeoabgfenejglbffodgkkbkcdhcgfn', 'hehggadaopoacecdllhhajmbjkdcmajg') },
+        [pscustomobject]@{ Name = 'browser_extension_name'; Items = $BrowserExtensionNameCatalog; Key = 'pattern'; Required = @('Claude', 'ChatGPT') },
+        [pscustomobject]@{ Name = 'domain'; Items = $DomainCatalog; Key = 'domain'; Required = @('claude.ai', 'chatgpt.com') }
+    )
+    foreach ($check in $checks) {
+        if (@($check.Items).Count -lt 1 -or @($check.Items | Where-Object { $_ -is [System.Array] }).Count -gt 0) {
+            throw [IO.InvalidDataException]::new(('embedded catalog shape invalid: ' + $check.Name))
+        }
+        foreach ($requiredValue in $check.Required) {
+            $matches = @($check.Items | Where-Object {
+                ([string]$_.($check.Key)).Equals([string]$requiredValue, [StringComparison]::OrdinalIgnoreCase)
+            })
+            if ($matches.Count -ne 1) {
+                throw [IO.InvalidDataException]::new(('embedded catalog key invalid: ' + $check.Name))
+            }
+        }
+    }
+}
 
 function Get-IsoTimestamp {
     return [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
@@ -1170,8 +1202,18 @@ function Collect-BrowserHistory {
     $matchers = @(Get-HistoryDomainMatchers)
     $browserRoots = @(
         [pscustomobject]@{ Browser = 'chrome'; Relative = 'AppData\Local\Google\Chrome\User Data'; HistoryName = 'History' },
+        [pscustomobject]@{ Browser = 'chrome-beta'; Relative = 'AppData\Local\Google\Chrome Beta\User Data'; HistoryName = 'History' },
+        [pscustomobject]@{ Browser = 'chrome-dev'; Relative = 'AppData\Local\Google\Chrome Dev\User Data'; HistoryName = 'History' },
+        [pscustomobject]@{ Browser = 'chrome-canary'; Relative = 'AppData\Local\Google\Chrome SxS\User Data'; HistoryName = 'History' },
         [pscustomobject]@{ Browser = 'edge'; Relative = 'AppData\Local\Microsoft\Edge\User Data'; HistoryName = 'History' },
+        [pscustomobject]@{ Browser = 'edge-beta'; Relative = 'AppData\Local\Microsoft\Edge Beta\User Data'; HistoryName = 'History' },
+        [pscustomobject]@{ Browser = 'edge-dev'; Relative = 'AppData\Local\Microsoft\Edge Dev\User Data'; HistoryName = 'History' },
+        [pscustomobject]@{ Browser = 'edge-canary'; Relative = 'AppData\Local\Microsoft\Edge SxS\User Data'; HistoryName = 'History' },
         [pscustomobject]@{ Browser = 'brave'; Relative = 'AppData\Local\BraveSoftware\Brave-Browser\User Data'; HistoryName = 'History' },
+        [pscustomobject]@{ Browser = 'chromium'; Relative = 'AppData\Local\Chromium\User Data'; HistoryName = 'History' },
+        [pscustomobject]@{ Browser = 'vivaldi'; Relative = 'AppData\Local\Vivaldi\User Data'; HistoryName = 'History' },
+        [pscustomobject]@{ Browser = 'arc'; Relative = 'AppData\Local\Packages\TheBrowserCompany.Arc_ttt1ap7aakyb4\LocalCache\Local\Arc\User Data'; HistoryName = 'History' },
+        [pscustomobject]@{ Browser = 'opera'; Relative = 'AppData\Roaming\Opera Software'; HistoryName = 'History' },
         [pscustomobject]@{ Browser = 'firefox'; Relative = 'AppData\Roaming\Mozilla\Firefox\Profiles'; HistoryName = 'places.sqlite' }
     )
     foreach ($profile in $Profiles) {
@@ -1675,6 +1717,11 @@ function Collect-BrowserExtensions {
 }
 
 try {
+    $Catalog = @(ConvertFrom-EmbeddedJsonArray -Json $CatalogJson)
+    $BrowserExtensionCatalog = @(ConvertFrom-EmbeddedJsonArray -Json $BrowserCatalogJson)
+    $BrowserExtensionNameCatalog = @(ConvertFrom-EmbeddedJsonArray -Json $BrowserNameCatalogJson)
+    $DomainCatalog = @(ConvertFrom-EmbeddedJsonArray -Json $DomainCatalogJson)
+    Assert-EmbeddedCatalogHealth
     if (-not $SelfTest) {
         if ($env:OS -ne 'Windows_NT') { throw [PlatformNotSupportedException]::new('Windows is required') }
         Collect-Processes

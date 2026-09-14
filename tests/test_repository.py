@@ -139,6 +139,44 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(document["findings"], [])
         self.assertFalse(document["collector"]["partial"])
 
+    def test_windows_embedded_catalogs_are_flattened_and_health_checked(self) -> None:
+        paths = [
+            ROOT / "templates" / "rmm-windows" / "ShadowAIInventory.ps1.tmpl",
+            ROOT / "dist" / "rmm-windows" / "ShadowAIInventory.ps1",
+        ]
+        direct_parse_pattern = re.compile(r"@\(\$[A-Za-z]+Json\s*\|\s*ConvertFrom-Json\)")
+        for path in paths:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("function ConvertFrom-EmbeddedJsonArray", content, str(path))
+            self.assertIn("ConvertFrom-Json -InputObject $Json", content, str(path))
+            self.assertIn("function Assert-EmbeddedCatalogHealth", content, str(path))
+            self.assertIn("Assert-EmbeddedCatalogHealth", content, str(path))
+            self.assertIn("fcoeoabgfenejglbffodgkkbkcdhcgfn", content, str(path))
+            self.assertIn("hehggadaopoacecdllhhajmbjkdcmajg", content, str(path))
+            self.assertIsNone(direct_parse_pattern.search(content), str(path))
+
+    def test_windows_history_coverage_matches_chromium_extension_roots(self) -> None:
+        paths = [
+            ROOT / "templates" / "rmm-windows" / "ShadowAIInventory.ps1.tmpl",
+            ROOT / "dist" / "rmm-windows" / "ShadowAIInventory.ps1",
+        ]
+        shared_roots = (
+            "AppData\\Local\\Google\\Chrome Beta\\User Data",
+            "AppData\\Local\\Google\\Chrome Dev\\User Data",
+            "AppData\\Local\\Google\\Chrome SxS\\User Data",
+            "AppData\\Local\\Microsoft\\Edge Beta\\User Data",
+            "AppData\\Local\\Microsoft\\Edge Dev\\User Data",
+            "AppData\\Local\\Microsoft\\Edge SxS\\User Data",
+            "AppData\\Local\\Chromium\\User Data",
+            "AppData\\Local\\Vivaldi\\User Data",
+            "AppData\\Local\\Packages\\TheBrowserCompany.Arc_ttt1ap7aakyb4\\LocalCache\\Local\\Arc\\User Data",
+            "AppData\\Roaming\\Opera Software",
+        )
+        for path in paths:
+            content = path.read_text(encoding="utf-8")
+            for root in shared_roots:
+                self.assertGreaterEqual(content.count(root), 2, f"{path} missing shared history root {root}")
+
     def test_collectors_have_no_remote_or_recursive_execution_primitives(self) -> None:
         paths = [
             ROOT / "templates" / "rmm-macos-linux" / "shadow_ai_inventory.py.tmpl",
