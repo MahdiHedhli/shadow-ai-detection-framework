@@ -25,7 +25,7 @@ from urllib.parse import urlsplit
 
 
 COLLECTOR_NAME = "shadow-ai-rmm-macos-linux"
-COLLECTOR_VERSION = "0.5.1"
+COLLECTOR_VERSION = "0.5.2"
 MAX_FINDINGS = 5000
 MAX_HOMES = 256
 MAX_PROCESS_BYTES = 65536
@@ -249,13 +249,13 @@ BROWSER_EXTENSION_CATALOG = [
     "provider_id": "sider"
   },
   {
-    "browser": "chrome",
+    "browser": "chromium-family",
     "extension_id": "ejcfepkfckglbgocfkanmcdngdijcgld",
     "extension_name": "ChatGPT search",
     "provider_id": "openai"
   },
   {
-    "browser": "chrome",
+    "browser": "chromium-family",
     "extension_id": "fcoeoabgfenejglbffodgkkbkcdhcgfn",
     "extension_name": "Claude",
     "provider_id": "anthropic"
