@@ -22,7 +22,7 @@ param([switch]$SelfTest)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $CollectorName = 'shadow-ai-rmm-windows'
-$CollectorVersion = '0.6.0'
+$CollectorVersion = '0.6.1'
 $MaxFindings = 5000
 $ExtensionIdPattern = '^[a-p]{32}$'
 $CatalogJson = @'
@@ -1253,6 +1253,61 @@ function Find-ExtensionNameClassification {
     return $null
 }
 
+function Resolve-ManifestLocalizedValue {
+    param(
+        [AllowNull()][string]$Value,
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)]$VersionDirectory
+    )
+    $safeValue = Get-SafeExtensionName -Value $Value
+    if ($null -eq $safeValue) { return $null }
+    if ($safeValue -notmatch '^__MSG_([A-Za-z0-9_@]+)__$') { return $safeValue }
+    $messageKey = $Matches[1]
+    $defaultLocale = Get-SafeExtensionName -Value ([string](Get-OptionalPropertyValue -InputObject $Manifest -Name 'default_locale'))
+    if ($null -eq $defaultLocale -or $defaultLocale -notmatch '^[A-Za-z0-9_-]{2,20}$') { return $null }
+    $messages = Read-BoundedJsonObject -LiteralPath (Join-Path -Path $VersionDirectory.FullName -ChildPath ('_locales\{0}\messages.json' -f $defaultLocale))
+    if ($null -eq $messages) { return $null }
+    $messageObject = Get-OptionalPropertyValue -InputObject $messages -Name $messageKey
+    if ($null -eq $messageObject) { return $null }
+    return Get-SafeExtensionName -Value ([string](Get-OptionalPropertyValue -InputObject $messageObject -Name 'message'))
+}
+
+function Find-ManifestTextClassification {
+    param([Parameter(Mandatory = $true)][string]$ExtensionPath)
+    try {
+        foreach ($versionDirectory in @(Get-ChildItem -LiteralPath $ExtensionPath -Directory -Force -ErrorAction Stop |
+            Where-Object { ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 } |
+            Sort-Object -Property Name -Descending | Select-Object -First 8)) {
+            $manifest = Read-BoundedJsonObject -LiteralPath (Join-Path -Path $versionDirectory.FullName -ChildPath 'manifest.json')
+            if ($null -eq $manifest) { continue }
+            $textValues = @()
+            foreach ($propertyName in @('name', 'short_name', 'description')) {
+                $resolved = Resolve-ManifestLocalizedValue -Value ([string](Get-OptionalPropertyValue -InputObject $manifest -Name $propertyName)) -Manifest $manifest -VersionDirectory $versionDirectory
+                if ($null -ne $resolved) { $textValues += $resolved }
+            }
+            foreach ($actionName in @('action', 'browser_action', 'page_action')) {
+                $action = Get-OptionalPropertyValue -InputObject $manifest -Name $actionName
+                if ($null -eq $action) { continue }
+                $resolved = Resolve-ManifestLocalizedValue -Value ([string](Get-OptionalPropertyValue -InputObject $action -Name 'default_title')) -Manifest $manifest -VersionDirectory $versionDirectory
+                if ($null -ne $resolved) { $textValues += $resolved }
+            }
+            foreach ($value in $textValues) {
+                $named = Find-ExtensionNameClassification -ExtensionName $value
+                if ($null -ne $named) {
+                    return [pscustomobject]@{ provider_id = $named.provider_id; confidence = $named.confidence }
+                }
+            }
+            $combinedText = $textValues -join ' '
+            if ($combinedText -match '(?i)\b(?:gpt(?:-?[0-9]+)?|llm|large language model|generative ai|ai assistant|ai-powered|artificial intelligence)\b') {
+                return [pscustomobject]@{ provider_id = 'generic'; confidence = 'low' }
+            }
+        }
+    } catch {
+        return $null
+    }
+    return $null
+}
+
 function Find-ManifestDomainClassification {
     param([Parameter(Mandatory = $true)][string]$ExtensionPath)
     try {
@@ -1364,6 +1419,21 @@ function Collect-ChromiumExtensionProfile {
                 classification_basis = 'manifest_name_local_only'
                 presence_only = $true
             }
+            $classifiedCount += 1
+            continue
+        }
+        $textClassification = Find-ManifestTextClassification -ExtensionPath $extension.FullName
+        if ($null -ne $textClassification) {
+            $indicator = New-SyntheticIndicator ('browser-' + $extension.Name) $textClassification.provider_id 'ai_browser_extension' $textClassification.confidence
+            $attributes = @{
+                browser = $Browser
+                profile = $BrowserProfile.Name
+                extension_id = $extension.Name
+                classification_basis = 'manifest_text_local_only'
+                presence_only = $true
+            }
+            if ($null -ne $resolvedName) { $attributes.extension_name = $resolvedName }
+            Add-Finding -Category 'browser_extension' -Indicator $indicator -SubjectUser $SubjectUser -Attributes $attributes
             $classifiedCount += 1
             continue
         }
