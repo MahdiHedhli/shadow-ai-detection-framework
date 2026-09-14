@@ -134,6 +134,20 @@ class ExtensionHistoryTests(unittest.TestCase):
                         "notes": "Publisher identity manually verified",
                     }
                 )
+                writer.writerow(
+                    {
+                        "observed_on": date.today().isoformat(),
+                        "extension_id": "b" * 32,
+                        "provider_id": "aaa-existing-order",
+                        "browser": "chromium-family",
+                        "extension_name": "Earlier Ledger Row",
+                        "source_url": f"https://chromewebstore.google.com/detail/earlier/{'b' * 32}",
+                        "verification_status": "catalog_baseline",
+                        "observed_url": f"https://chromewebstore.google.com/detail/earlier/{'b' * 32}",
+                        "http_status": "",
+                        "notes": "Existing append-only order",
+                    }
+                )
 
             original_paths = updater.CATALOG_PATH, updater.HISTORY_PATH, updater.CANDIDATE_PATH
             updater.CATALOG_PATH, updater.HISTORY_PATH, updater.CANDIDATE_PATH = catalog, history, candidates
@@ -146,7 +160,8 @@ class ExtensionHistoryTests(unittest.TestCase):
 
             with history.open("r", encoding="utf-8", newline="") as handle:
                 history_rows = list(csv.DictReader(handle))
-            self.assertEqual(len(history_rows), 1)
+            self.assertEqual(len(history_rows), 2)
+            self.assertEqual(history_rows[0]["extension_id"], extension_id)
             self.assertEqual(history_rows[0]["verification_status"], "verified_official_listing")
             self.assertEqual(history_rows[0]["notes"], "Publisher identity manually verified")
 
