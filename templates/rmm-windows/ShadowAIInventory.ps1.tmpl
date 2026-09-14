@@ -225,7 +225,7 @@ function Get-UserProfiles {
 }
 
 function Collect-KnownPaths {
-    param([object[]]$Profiles)
+    param([AllowEmptyCollection()][object[]]$Profiles)
     $modelIndicator = $Catalog | Where-Object { $_.artifact_id -eq 'file-model-001' } | Select-Object -First 1
     $mcp = @{}
     foreach ($item in @($Catalog | Where-Object { $_.artifact_type -eq 'config_file' })) {
@@ -509,7 +509,7 @@ function Collect-BrowserHistory {
 }
 
 function Collect-BrowserExtensions {
-    param([object[]]$Profiles)
+    param([AllowEmptyCollection()][object[]]$Profiles)
     $knownExtensions = @{}
     foreach ($known in $BrowserExtensionCatalog) { $knownExtensions[[string]$known.extension_id] = $known }
     $browserRoots = @(
@@ -568,7 +568,21 @@ try {
     if ($Document.collector.partial) { exit 2 }
     exit 0
 } catch {
-    $fatalType = $_.Exception.GetType().Name
-    [ordered]@{ error = ('fatal:' + $fatalType) } | ConvertTo-Json -Compress | Write-Error
+    $fatalRecord = $_
+    $fatalCommand = ''
+    if ($null -ne $fatalRecord.InvocationInfo -and $null -ne $fatalRecord.InvocationInfo.MyCommand) {
+        $fatalCommand = [string]$fatalRecord.InvocationInfo.MyCommand.Name
+    }
+    $fatalParameter = ''
+    if ($fatalRecord.Exception.PSObject.Properties['ParameterName']) {
+        $fatalParameter = [string]$fatalRecord.Exception.ParameterName
+    }
+    [ordered]@{
+        error = ('fatal:' + $fatalRecord.Exception.GetType().Name)
+        error_id = [string]$fatalRecord.FullyQualifiedErrorId
+        command = $fatalCommand
+        parameter = $fatalParameter
+        line = [int]$fatalRecord.InvocationInfo.ScriptLineNumber
+    } | ConvertTo-Json -Compress
     exit 1
 }
