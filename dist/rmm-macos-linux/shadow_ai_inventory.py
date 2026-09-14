@@ -25,7 +25,7 @@ from urllib.parse import urlsplit
 
 
 COLLECTOR_NAME = "shadow-ai-rmm-macos-linux"
-COLLECTOR_VERSION = "0.6.2"
+COLLECTOR_VERSION = "0.6.3"
 MAX_FINDINGS = 5000
 MAX_HOMES = 256
 MAX_PROCESS_BYTES = 65536
@@ -1116,10 +1116,68 @@ def add_extension_inventory_summary(
     )
 
 
-def known_preference_extension_ids(
-    profile: Path, known_extensions: dict[str, dict[str, str]]
-) -> set[str]:
-    matches: set[str] = set()
+def preference_manifest_classification(manifest: object) -> dict[str, str | None] | None:
+    if not isinstance(manifest, dict):
+        return None
+    text_values: list[str] = []
+    for property_name in ("name", "short_name", "description"):
+        value = safe_extension_name(manifest.get(property_name))
+        if value and not re.fullmatch(r"__MSG_[A-Za-z0-9_@]+__", value):
+            text_values.append(value)
+    for action_name in ("action", "browser_action", "page_action"):
+        action = manifest.get(action_name)
+        value = safe_extension_name(action.get("default_title")) if isinstance(action, dict) else None
+        if value and not re.fullmatch(r"__MSG_[A-Za-z0-9_@]+__", value):
+            text_values.append(value)
+    for value in text_values:
+        named = extension_name_classification(value)
+        if named:
+            return {
+                "provider_id": named["provider_id"],
+                "confidence": named["confidence"],
+                "name": value,
+                "matched_domain": None,
+                "basis": "browser_preferences_manifest_name_local_only",
+            }
+    if re.search(
+        r"(?i)\b(?:gpt(?:-?[0-9]+)?|llm|large language model|generative ai|ai assistant|ai-powered|artificial intelligence)\b",
+        " ".join(text_values),
+    ):
+        return {
+            "provider_id": "generic",
+            "confidence": "low",
+            "name": None,
+            "matched_domain": None,
+            "basis": "browser_preferences_manifest_text_local_only",
+        }
+    access_values: list[str] = []
+    for property_name in ("permissions", "host_permissions", "optional_host_permissions"):
+        values = manifest.get(property_name)
+        if isinstance(values, list):
+            access_values.extend(value for value in values if isinstance(value, str))
+    content_scripts = manifest.get("content_scripts")
+    if isinstance(content_scripts, list):
+        for content_script in content_scripts:
+            matches = content_script.get("matches") if isinstance(content_script, dict) else None
+            if isinstance(matches, list):
+                access_values.extend(value for value in matches if isinstance(value, str))
+    for indicator in DOMAIN_CATALOG:
+        escaped = re.escape(indicator["domain"])
+        host = rf"(?:[a-z0-9-]+\.)*{escaped}" if indicator["indicator_type"] == "registered_domain" else escaped
+        pattern = re.compile(rf"(?i)(?:^|[/:*.]){host}(?:[/:*]|$)")
+        if any(pattern.search(value) for value in access_values):
+            return {
+                "provider_id": indicator["provider_id"],
+                "confidence": "medium",
+                "name": None,
+                "matched_domain": indicator["domain"],
+                "basis": "browser_preferences_manifest_domain_local_only",
+            }
+    return None
+
+
+def preference_extensions(profile: Path, maximum_entries: int = 1000) -> dict[str, object]:
+    matches: dict[str, object] = {}
     for preference_name in ("Preferences", "Secure Preferences"):
         document = read_bounded_json(profile / preference_name, MAX_BROWSER_PREFERENCE_BYTES)
         if not isinstance(document, dict):
@@ -1128,7 +1186,12 @@ def known_preference_extension_ids(
         settings = extensions.get("settings") if isinstance(extensions, dict) else None
         if not isinstance(settings, dict):
             continue
-        matches.update(extension_id for extension_id in known_extensions if extension_id in settings)
+        for extension_id, entry in list(settings.items())[:maximum_entries]:
+            if not EXTENSION_ID_RE.fullmatch(extension_id) or not isinstance(entry, dict):
+                continue
+            manifest = entry.get("manifest")
+            if extension_id not in matches or isinstance(manifest, dict):
+                matches[extension_id] = manifest
     return matches
 
 
@@ -1147,7 +1210,8 @@ def collect_chromium_extension_profile(
             for extension in sorted(extension_root.iterdir(), key=lambda item: item.name)[:1000]
             if EXTENSION_ID_RE.fullmatch(extension.name) and safe_exists(extension) and extension.is_dir()
         }
-    extension_ids = set(extension_paths) | known_preference_extension_ids(profile, known_extensions)
+    indexed_extensions = preference_extensions(profile)
+    extension_ids = set(extension_paths) | set(indexed_extensions)
     if not extension_ids:
         return
     installed_count = 0
@@ -1167,6 +1231,32 @@ def collect_chromium_extension_profile(
             classification_basis = "catalog_id" if extension is not None else "browser_preferences_catalog_id"
         else:
             if extension is None:
+                preference_classification = preference_manifest_classification(indexed_extensions.get(extension_id))
+                if preference_classification:
+                    attributes: dict[str, object] = {
+                        "browser": browser,
+                        "profile": profile.name,
+                        "extension_id": extension_id,
+                        "classification_basis": preference_classification["basis"],
+                        "presence_only": True,
+                    }
+                    if preference_classification["name"] is not None:
+                        attributes["extension_name"] = preference_classification["name"]
+                    if preference_classification["matched_domain"] is not None:
+                        attributes["matched_domain"] = preference_classification["matched_domain"]
+                    add_finding(
+                        document,
+                        "browser_extension",
+                        synthetic(
+                            "browser-" + extension_id,
+                            str(preference_classification["provider_id"]),
+                            "ai_browser_extension",
+                            str(preference_classification["confidence"]),
+                        ),
+                        user,
+                        **attributes,
+                    )
+                    classified_count += 1
                 continue
             extension_name = resolve_chromium_extension_name(extension)
             classification = extension_name_classification(extension_name)
@@ -1265,7 +1355,12 @@ def collect_browser_extensions(document: dict[str, object], homes: list[tuple[st
     roots_by_family = {
         "macos": [
             ("chrome", Path("Library/Application Support/Google/Chrome"), False),
+            ("chrome-beta", Path("Library/Application Support/Google/Chrome Beta"), False),
+            ("chrome-canary", Path("Library/Application Support/Google/Chrome Canary"), False),
             ("edge", Path("Library/Application Support/Microsoft Edge"), False),
+            ("edge-beta", Path("Library/Application Support/Microsoft Edge Beta"), False),
+            ("edge-dev", Path("Library/Application Support/Microsoft Edge Dev"), False),
+            ("edge-canary", Path("Library/Application Support/Microsoft Edge Canary"), False),
             ("brave", Path("Library/Application Support/BraveSoftware/Brave-Browser"), False),
             ("chromium", Path("Library/Application Support/Chromium"), False),
             ("vivaldi", Path("Library/Application Support/Vivaldi"), False),
@@ -1274,8 +1369,12 @@ def collect_browser_extensions(document: dict[str, object], homes: list[tuple[st
         ],
         "linux": [
             ("chrome", Path(".config/google-chrome"), False),
+            ("chrome-beta", Path(".config/google-chrome-beta"), False),
+            ("chrome-dev", Path(".config/google-chrome-unstable"), False),
             ("chromium", Path(".config/chromium"), False),
             ("edge", Path(".config/microsoft-edge"), False),
+            ("edge-beta", Path(".config/microsoft-edge-beta"), False),
+            ("edge-dev", Path(".config/microsoft-edge-dev"), False),
             ("brave", Path(".config/BraveSoftware/Brave-Browser"), False),
             ("vivaldi", Path(".config/vivaldi"), False),
             ("opera", Path(".config/opera"), True),

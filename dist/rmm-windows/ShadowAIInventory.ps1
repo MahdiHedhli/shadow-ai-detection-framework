@@ -22,7 +22,7 @@ param([switch]$SelfTest)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $CollectorName = 'shadow-ai-rmm-windows'
-$CollectorVersion = '0.6.2'
+$CollectorVersion = '0.6.3'
 $MaxFindings = 5000
 $ExtensionIdPattern = '^[a-p]{32}$'
 $CatalogJson = @'
@@ -1383,12 +1383,60 @@ function Add-ExtensionInventorySummary {
     }
 }
 
-function Get-KnownPreferenceExtensionIds {
+function Find-PreferenceManifestClassification {
+    param([AllowNull()]$Manifest)
+    if ($null -eq $Manifest) { return $null }
+    $textValues = @()
+    foreach ($propertyName in @('name', 'short_name', 'description')) {
+        $value = Get-SafeExtensionName -Value ([string](Get-OptionalPropertyValue -InputObject $Manifest -Name $propertyName))
+        if ($null -ne $value -and $value -notmatch '^__MSG_[A-Za-z0-9_@]+__$') { $textValues += $value }
+    }
+    foreach ($actionName in @('action', 'browser_action', 'page_action')) {
+        $action = Get-OptionalPropertyValue -InputObject $Manifest -Name $actionName
+        if ($null -eq $action) { continue }
+        $value = Get-SafeExtensionName -Value ([string](Get-OptionalPropertyValue -InputObject $action -Name 'default_title'))
+        if ($null -ne $value -and $value -notmatch '^__MSG_[A-Za-z0-9_@]+__$') { $textValues += $value }
+    }
+    foreach ($value in $textValues) {
+        $named = Find-ExtensionNameClassification -ExtensionName $value
+        if ($null -ne $named) {
+            return [pscustomobject]@{ ProviderId = $named.provider_id; Confidence = $named.confidence; Name = $value; MatchedDomain = $null; Basis = 'browser_preferences_manifest_name_local_only' }
+        }
+    }
+    if (($textValues -join ' ') -match '(?i)\b(?:gpt(?:-?[0-9]+)?|llm|large language model|generative ai|ai assistant|ai-powered|artificial intelligence)\b') {
+        return [pscustomobject]@{ ProviderId = 'generic'; Confidence = 'low'; Name = $null; MatchedDomain = $null; Basis = 'browser_preferences_manifest_text_local_only' }
+    }
+    $accessValues = @()
+    foreach ($propertyName in @('permissions', 'host_permissions', 'optional_host_permissions')) {
+        foreach ($value in @((Get-OptionalPropertyValue -InputObject $Manifest -Name $propertyName))) {
+            if ($value -is [string]) { $accessValues += $value }
+        }
+    }
+    foreach ($contentScript in @((Get-OptionalPropertyValue -InputObject $Manifest -Name 'content_scripts'))) {
+        if ($null -eq $contentScript) { continue }
+        foreach ($value in @((Get-OptionalPropertyValue -InputObject $contentScript -Name 'matches'))) {
+            if ($value -is [string]) { $accessValues += $value }
+        }
+    }
+    foreach ($indicator in $DomainCatalog) {
+        $escapedDomain = [Regex]::Escape(([string]$indicator.domain).ToLowerInvariant())
+        $hostPattern = if ($indicator.indicator_type -eq 'registered_domain') { '(?:[a-z0-9-]+\.)*' + $escapedDomain } else { $escapedDomain }
+        $domainRegex = [Regex]::new('(?i)(?:^|[/:*.])' + $hostPattern + '(?:[/:*]|$)', [Text.RegularExpressions.RegexOptions]::CultureInvariant)
+        foreach ($value in $accessValues) {
+            if ($domainRegex.IsMatch([string]$value)) {
+                return [pscustomobject]@{ ProviderId = $indicator.provider_id; Confidence = 'medium'; Name = $null; MatchedDomain = $indicator.domain; Basis = 'browser_preferences_manifest_domain_local_only' }
+            }
+        }
+    }
+    return $null
+}
+
+function Get-PreferenceExtensions {
     param(
         [Parameter(Mandatory = $true)]$BrowserProfile,
-        [Parameter(Mandatory = $true)][hashtable]$KnownExtensions
+        [Parameter(Mandatory = $true)][int]$MaximumEntries
     )
-    $matchedIds = @{}
+    $extensionsById = @{}
     foreach ($preferenceName in @('Preferences', 'Secure Preferences')) {
         $preferenceDocument = Read-BoundedJsonObject -LiteralPath (Join-Path -Path $BrowserProfile.FullName -ChildPath $preferenceName) -MaxBytes $MaxBrowserPreferenceBytes
         if ($null -eq $preferenceDocument) { continue }
@@ -1396,13 +1444,16 @@ function Get-KnownPreferenceExtensionIds {
         if ($null -eq $extensions) { continue }
         $settings = Get-OptionalPropertyValue -InputObject $extensions -Name 'settings'
         if ($null -eq $settings) { continue }
-        foreach ($knownId in @($KnownExtensions.Keys)) {
-            if ($null -ne $settings.PSObject.Properties[[string]$knownId]) {
-                $matchedIds[[string]$knownId] = $true
+        foreach ($property in @($settings.PSObject.Properties | Select-Object -First $MaximumEntries)) {
+            if ([string]$property.Name -notmatch $ExtensionIdPattern) { continue }
+            if ($null -eq $property.Value) { continue }
+            $manifest = Get-OptionalPropertyValue -InputObject $property.Value -Name 'manifest'
+            if (-not $extensionsById.ContainsKey([string]$property.Name) -or $null -ne $manifest) {
+                $extensionsById[[string]$property.Name] = $manifest
             }
         }
     }
-    return @($matchedIds.Keys)
+    return $extensionsById
 }
 
 function Collect-ChromiumExtensionProfile {
@@ -1426,7 +1477,8 @@ function Collect-ChromiumExtensionProfile {
     }
     $extensionIds = @{}
     foreach ($extensionId in @($extensionPaths.Keys)) { $extensionIds[[string]$extensionId] = $true }
-    foreach ($extensionId in @(Get-KnownPreferenceExtensionIds -BrowserProfile $BrowserProfile -KnownExtensions $KnownExtensions)) {
+    $preferenceExtensions = Get-PreferenceExtensions -BrowserProfile $BrowserProfile -MaximumEntries 1000
+    foreach ($extensionId in @($preferenceExtensions.Keys)) {
         $extensionIds[[string]$extensionId] = $true
     }
     if ($extensionIds.Count -eq 0) { return }
@@ -1453,7 +1505,24 @@ function Collect-ChromiumExtensionProfile {
             $classifiedCount += 1
             continue
         }
-        if ($null -eq $extension) { continue }
+        if ($null -eq $extension) {
+            $preferenceClassification = Find-PreferenceManifestClassification -Manifest $preferenceExtensions[[string]$extensionId]
+            if ($null -ne $preferenceClassification) {
+                $indicator = New-SyntheticIndicator ('browser-' + $extensionId) $preferenceClassification.ProviderId 'ai_browser_extension' $preferenceClassification.Confidence
+                $attributes = @{
+                    browser = $Browser
+                    profile = $BrowserProfile.Name
+                    extension_id = $extensionId
+                    classification_basis = $preferenceClassification.Basis
+                    presence_only = $true
+                }
+                if ($null -ne $preferenceClassification.Name) { $attributes.extension_name = $preferenceClassification.Name }
+                if ($null -ne $preferenceClassification.MatchedDomain) { $attributes.matched_domain = $preferenceClassification.MatchedDomain }
+                Add-Finding -Category 'browser_extension' -Indicator $indicator -SubjectUser $SubjectUser -Attributes $attributes
+                $classifiedCount += 1
+            }
+            continue
+        }
         $resolvedName = Resolve-ChromiumExtensionName -ExtensionPath $extension.FullName
         $classification = Find-ExtensionNameClassification -ExtensionName $resolvedName
         if ($null -ne $classification) {
@@ -1544,7 +1613,13 @@ function Collect-BrowserExtensions {
     foreach ($known in $BrowserExtensionCatalog) { $knownExtensions[[string]$known.extension_id] = $known }
     $browserRoots = @(
         [pscustomobject]@{ Browser = 'chrome'; Relative = 'AppData\Local\Google\Chrome\User Data' },
+        [pscustomobject]@{ Browser = 'chrome-beta'; Relative = 'AppData\Local\Google\Chrome Beta\User Data' },
+        [pscustomobject]@{ Browser = 'chrome-dev'; Relative = 'AppData\Local\Google\Chrome Dev\User Data' },
+        [pscustomobject]@{ Browser = 'chrome-canary'; Relative = 'AppData\Local\Google\Chrome SxS\User Data' },
         [pscustomobject]@{ Browser = 'edge'; Relative = 'AppData\Local\Microsoft\Edge\User Data' },
+        [pscustomobject]@{ Browser = 'edge-beta'; Relative = 'AppData\Local\Microsoft\Edge Beta\User Data' },
+        [pscustomobject]@{ Browser = 'edge-dev'; Relative = 'AppData\Local\Microsoft\Edge Dev\User Data' },
+        [pscustomobject]@{ Browser = 'edge-canary'; Relative = 'AppData\Local\Microsoft\Edge SxS\User Data' },
         [pscustomobject]@{ Browser = 'brave'; Relative = 'AppData\Local\BraveSoftware\Brave-Browser\User Data' },
         [pscustomobject]@{ Browser = 'chromium'; Relative = 'AppData\Local\Chromium\User Data' },
         [pscustomobject]@{ Browser = 'vivaldi'; Relative = 'AppData\Local\Vivaldi\User Data' },
