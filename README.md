@@ -49,7 +49,7 @@ pwsh -NoProfile -File dist/rmm-windows/ShadowAIInventory.ps1 -SelfTest
 - Require source, validation date, and licensing information for borrowed material.
 - Prefer normalized schemas and portable rules over vendor-specific logic.
 
-See [Architecture](docs/architecture.md), [Detection model](docs/detection-model.md), [RMM collectors](docs/rmm-collectors.md), and [Source register](docs/source-register.md).
+See [Architecture](docs/architecture.md), [Detection model](docs/detection-model.md), [RMM collectors](docs/rmm-collectors.md), [Backlog](docs/backlog.md), and [Source register](docs/source-register.md).
 
 ## Project status
 
