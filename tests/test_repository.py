@@ -35,18 +35,25 @@ class RepositoryTests(unittest.TestCase):
         browser_extension_names = build.read_csv(
             ROOT / "catalog" / "browser_extension_name_patterns.csv", build.BROWSER_EXTENSION_NAME_REQUIRED
         )
+        browser_extension_history = build.read_csv(
+            ROOT / "catalog" / "browser_extension_history.csv", build.BROWSER_EXTENSION_HISTORY_REQUIRED
+        )
         build.validate_domains(domains)
         build.validate_artifacts(artifacts)
         build.validate_browser_extensions(browser_extensions)
         build.validate_browser_extension_names(browser_extension_names)
+        build.validate_browser_extension_history(browser_extension_history)
         self.assertGreaterEqual(len(domains), 25)
         self.assertGreaterEqual(len(artifacts), 15)
         self.assertGreaterEqual(len(browser_extensions), 4)
         self.assertGreaterEqual(len(browser_extension_names), 25)
+        self.assertGreaterEqual(len(browser_extension_history), len(browser_extensions))
         extension_ids = {row["extension_id"]: row for row in browser_extensions}
         self.assertEqual(extension_ids["fcoeoabgfenejglbffodgkkbkcdhcgfn"]["provider_id"], "anthropic")
+        self.assertEqual(extension_ids["hehggadaopoacecdllhhajmbjkdcmajg"]["provider_id"], "openai")
         self.assertEqual(extension_ids["ejcfepkfckglbgocfkanmcdngdijcgld"]["provider_id"], "openai")
         self.assertEqual(extension_ids["fcoeoabgfenejglbffodgkkbkcdhcgfn"]["browser"], "chromium-family")
+        self.assertEqual(extension_ids["hehggadaopoacecdllhhajmbjkdcmajg"]["browser"], "chromium-family")
         self.assertEqual(extension_ids["ejcfepkfckglbgocfkanmcdngdijcgld"]["browser"], "chromium-family")
 
     def test_browser_extension_name_patterns_are_specific(self) -> None:
@@ -347,6 +354,39 @@ class RepositoryTests(unittest.TestCase):
             serialized = json.dumps(document)
             self.assertNotIn("Ordinary bookmark helper", serialized)
             self.assertNotIn("a" * 32, serialized)
+
+    def test_python_extension_inventory_uses_known_profile_preference_ids(self) -> None:
+        collector = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"
+        spec = importlib.util.spec_from_file_location("shadow_ai_preference_inventory", collector)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as temporary:
+            profile = Path(temporary) / "Default"
+            profile.mkdir(parents=True)
+            extension_id = "hehggadaopoacecdllhhajmbjkdcmajg"
+            (profile / "Secure Preferences").write_text(
+                json.dumps({"extensions": {"settings": {extension_id: {"state": 1}}}}),
+                encoding="utf-8",
+            )
+            known = {
+                extension_id: {
+                    "extension_id": extension_id,
+                    "provider_id": "openai",
+                    "browser": "chromium-family",
+                    "extension_name": "ChatGPT",
+                }
+            }
+            document = module.new_document()
+            module.collect_chromium_extension_profile(document, "chrome", profile, "tester", known)
+            findings = document["findings"]
+            classified = next(item for item in findings if item["capability"] == "ai_browser_extension")
+            inventory = next(item for item in findings if item["capability"] == "browser_extension_inventory")
+            self.assertEqual(classified["provider_id"], "openai")
+            self.assertEqual(classified["confidence"], "medium")
+            self.assertEqual(classified["attributes"]["classification_basis"], "browser_preferences_catalog_id")
+            self.assertEqual(inventory["attributes"]["installed_extension_count"], 1)
+            self.assertEqual(inventory["attributes"]["classified_extension_count"], 1)
 
     def test_python_firefox_extension_inventory_and_classification(self) -> None:
         collector = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"
