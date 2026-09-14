@@ -324,7 +324,7 @@ function Collect-AppxSoftware {
     param(
         [Parameter(Mandatory = $true)][object[]]$NameIndicators,
         [Parameter(Mandatory = $true)][hashtable]$Seen,
-        [Parameter(Mandatory = $true)][object[]]$Profiles
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Profiles
     )
     try {
         if ($null -eq (Get-Command -Name 'Get-AppxPackage' -ErrorAction SilentlyContinue)) {
@@ -364,7 +364,7 @@ function Collect-AppxSoftware {
 
 function Collect-KnownApplicationPaths {
     param(
-        [Parameter(Mandatory = $true)][object[]]$Profiles,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Profiles,
         [Parameter(Mandatory = $true)][object[]]$NameIndicators,
         [Parameter(Mandatory = $true)][hashtable]$Seen
     )
@@ -394,7 +394,7 @@ function Collect-KnownApplicationPaths {
 }
 
 function Collect-InstalledSoftware {
-    param([Parameter(Mandatory = $true)][object[]]$Profiles)
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Profiles)
     $nameIndicators = @(
         [pscustomobject]@{ Pattern = 'Ollama'; Indicator = (New-SyntheticIndicator 'software-ollama' 'ollama' 'local_model_runtime' 'high') },
         [pscustomobject]@{ Pattern = 'LM Studio'; Indicator = (New-SyntheticIndicator 'software-lmstudio' 'lmstudio' 'local_model_runtime' 'high') },
@@ -474,7 +474,7 @@ function Find-HistoryDomainMatches {
 }
 
 function Collect-BrowserHistory {
-    param([Parameter(Mandatory = $true)][object[]]$Profiles)
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Profiles)
     $matchers = @(Get-HistoryDomainMatchers)
     $browserRoots = @(
         [pscustomobject]@{ Browser = 'chrome'; Relative = 'AppData\Local\Google\Chrome\User Data'; HistoryName = 'History' },
@@ -556,6 +556,9 @@ try {
         if ($env:OS -ne 'Windows_NT') { throw [PlatformNotSupportedException]::new('Windows is required') }
         Collect-Processes
         $profiles = @(Get-UserProfiles)
+        if ($profiles.Count -eq 0) {
+            Add-PartialError -Operation 'profile_inventory_empty' -Exception ([IO.InvalidDataException]::new('no local profiles discovered'))
+        }
         Collect-KnownPaths -Profiles $profiles
         Collect-InstalledSoftware -Profiles $profiles
         Collect-BrowserExtensions -Profiles $profiles

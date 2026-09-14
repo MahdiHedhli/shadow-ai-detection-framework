@@ -158,6 +158,16 @@ class RepositoryTests(unittest.TestCase):
             self.assertNotIn("reg.exe load", content.lower(), str(path))
             self.assertNotIn("reg load", content.lower(), str(path))
 
+    def test_windows_empty_profile_inventory_is_partial_not_fatal(self) -> None:
+        paths = [
+            ROOT / "templates" / "rmm-windows" / "ShadowAIInventory.ps1.tmpl",
+            ROOT / "dist" / "rmm-windows" / "ShadowAIInventory.ps1",
+        ]
+        for path in paths:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("[AllowEmptyCollection()][object[]]$Profiles", content, str(path))
+            self.assertIn("profile_inventory_empty", content, str(path))
+
     def test_collectors_cover_all_local_profiles_without_emitting_raw_history(self) -> None:
         windows_paths = [
             ROOT / "templates" / "rmm-windows" / "ShadowAIInventory.ps1.tmpl",
