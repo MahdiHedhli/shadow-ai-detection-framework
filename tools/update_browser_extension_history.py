@@ -146,10 +146,10 @@ def update_inventory(
 ) -> tuple[int, int]:
     catalog = read_rows(CATALOG_PATH)
     today = date.today().isoformat()
-    history = [
-        row for row in read_rows(HISTORY_PATH)
-        if not (row.get("observed_on") == today and row.get("extension_id") in {item["extension_id"] for item in catalog})
-    ]
+    history = read_rows(HISTORY_PATH)
+    recorded_observations = {
+        (row.get("observed_on", ""), row.get("extension_id", "")) for row in history
+    }
     candidates = read_rows(CANDIDATE_PATH)
     active_ids = {row["extension_id"] for row in catalog}
     candidate_ids = {row.get("extension_id", "") for row in candidates}
@@ -157,7 +157,13 @@ def update_inventory(
     for row in catalog:
         result = fetcher(row["source_url"], timeout)
         observation, candidate = classify_result(row, result)
-        history.append(observation)
+        observation_key = (today, row["extension_id"])
+        # A dated observation is immutable. In particular, an automated URL
+        # reachability check must never downgrade a same-day publisher identity
+        # that an analyst already verified manually.
+        if observation_key not in recorded_observations:
+            history.append(observation)
+            recorded_observations.add(observation_key)
         if candidate and candidate["extension_id"] not in active_ids | candidate_ids:
             candidates.append(candidate)
             candidate_ids.add(candidate["extension_id"])

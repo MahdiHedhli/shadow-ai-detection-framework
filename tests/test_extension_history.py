@@ -5,6 +5,7 @@ import importlib.util
 import sys
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 
@@ -82,6 +83,72 @@ class ExtensionHistoryTests(unittest.TestCase):
             self.assertEqual(history_rows[0]["verification_status"], "redirected_id_review_required")
             self.assertEqual(candidate_rows[0]["extension_id"], new_id)
             self.assertEqual(candidate_rows[0]["status"], "review_required")
+
+    def test_same_day_manual_verification_is_not_replaced(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            catalog = root / "browser_extensions.csv"
+            history = root / "browser_extension_history.csv"
+            candidates = root / "browser_extension_candidates.csv"
+            extension_id = "a" * 32
+            source_url = f"https://chromewebstore.google.com/detail/example/{extension_id}"
+            with catalog.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=(
+                        "extension_id",
+                        "provider_id",
+                        "browser",
+                        "extension_name",
+                        "source_url",
+                        "last_validated",
+                        "notes",
+                    ),
+                )
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "extension_id": extension_id,
+                        "provider_id": "example",
+                        "browser": "chromium-family",
+                        "extension_name": "Example AI",
+                        "source_url": source_url,
+                        "last_validated": date.today().isoformat(),
+                        "notes": "test",
+                    }
+                )
+            with history.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=updater.HISTORY_FIELDS)
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "observed_on": date.today().isoformat(),
+                        "extension_id": extension_id,
+                        "provider_id": "example",
+                        "browser": "chromium-family",
+                        "extension_name": "Example AI",
+                        "source_url": source_url,
+                        "verification_status": "verified_official_listing",
+                        "observed_url": source_url,
+                        "http_status": "200",
+                        "notes": "Publisher identity manually verified",
+                    }
+                )
+
+            original_paths = updater.CATALOG_PATH, updater.HISTORY_PATH, updater.CANDIDATE_PATH
+            updater.CATALOG_PATH, updater.HISTORY_PATH, updater.CANDIDATE_PATH = catalog, history, candidates
+            try:
+                updater.update_inventory(
+                    fetcher=lambda _url, _timeout: updater.FetchResult(200, source_url, b"Example AI")
+                )
+            finally:
+                updater.CATALOG_PATH, updater.HISTORY_PATH, updater.CANDIDATE_PATH = original_paths
+
+            with history.open("r", encoding="utf-8", newline="") as handle:
+                history_rows = list(csv.DictReader(handle))
+            self.assertEqual(len(history_rows), 1)
+            self.assertEqual(history_rows[0]["verification_status"], "verified_official_listing")
+            self.assertEqual(history_rows[0]["notes"], "Publisher identity manually verified")
 
     def test_workflow_actions_are_commit_pinned(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "update-browser-extension-inventory.yml").read_text(
