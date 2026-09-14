@@ -22,7 +22,7 @@ param([switch]$SelfTest)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $CollectorName = 'shadow-ai-rmm-windows'
-$CollectorVersion = '0.6.3'
+$CollectorVersion = '0.6.4'
 $MaxFindings = 5000
 $ExtensionIdPattern = '^[a-p]{32}$'
 $CatalogJson = @'
@@ -1475,10 +1475,24 @@ function Collect-ChromiumExtensionProfile {
             }
         }
     }
+    $stateExtensionIds = @{}
+    foreach ($stateDirectoryName in @('Local Extension Settings', 'Sync Extension Settings')) {
+        $stateRoot = Join-Path -Path $BrowserProfile.FullName -ChildPath $stateDirectoryName
+        if (-not (Test-SafePath -LiteralPath $stateRoot)) { continue }
+        foreach ($knownId in @($KnownExtensions.Keys)) {
+            $statePath = Join-Path -Path $stateRoot -ChildPath ([string]$knownId)
+            if (Test-SafePath -LiteralPath $statePath) {
+                $stateExtensionIds[[string]$knownId] = $true
+            }
+        }
+    }
     $extensionIds = @{}
     foreach ($extensionId in @($extensionPaths.Keys)) { $extensionIds[[string]$extensionId] = $true }
     $preferenceExtensions = Get-PreferenceExtensions -BrowserProfile $BrowserProfile -MaximumEntries 1000
     foreach ($extensionId in @($preferenceExtensions.Keys)) {
+        $extensionIds[[string]$extensionId] = $true
+    }
+    foreach ($extensionId in @($stateExtensionIds.Keys)) {
         $extensionIds[[string]$extensionId] = $true
     }
     if ($extensionIds.Count -eq 0) { return }
@@ -1493,13 +1507,20 @@ function Collect-ChromiumExtensionProfile {
             $known.browser -in @($Browser, 'chromium-family')
         ) {
             $catalogConfidence = if ($null -ne $extension) { 'high' } else { 'medium' }
+            $classificationBasis = if ($null -ne $extension) {
+                'catalog_id'
+            } elseif ($preferenceExtensions.ContainsKey([string]$extensionId)) {
+                'browser_preferences_catalog_id'
+            } else {
+                'browser_extension_state_catalog_id'
+            }
             $indicator = New-SyntheticIndicator ('browser-' + $extensionId) $known.provider_id 'ai_browser_extension' $catalogConfidence
             Add-Finding -Category 'browser_extension' -Indicator $indicator -SubjectUser $SubjectUser -Attributes @{
                 browser = $Browser
                 profile = $BrowserProfile.Name
                 extension_id = $extensionId
                 extension_name = $known.extension_name
-                classification_basis = if ($null -ne $extension) { 'catalog_id' } else { 'browser_preferences_catalog_id' }
+                classification_basis = $classificationBasis
                 presence_only = $true
             }
             $classifiedCount += 1

@@ -421,6 +421,39 @@ class RepositoryTests(unittest.TestCase):
                 "browser_preferences_manifest_name_local_only",
             )
 
+    def test_python_extension_inventory_uses_known_local_state_ids(self) -> None:
+        collector = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"
+        spec = importlib.util.spec_from_file_location("shadow_ai_extension_state", collector)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as temporary:
+            profile = Path(temporary) / "Default"
+            extension_id = "d" * 32
+            (profile / "Local Extension Settings" / extension_id).mkdir(parents=True)
+            document = module.new_document()
+            module.collect_chromium_extension_profile(
+                document,
+                "chrome",
+                profile,
+                "tester",
+                {
+                    extension_id: {
+                        "browser": "chromium-family",
+                        "provider_id": "anthropic",
+                        "extension_name": "Claude",
+                    }
+                },
+            )
+            classified = next(
+                item for item in document["findings"] if item["capability"] == "ai_browser_extension"
+            )
+            self.assertEqual(classified["provider_id"], "anthropic")
+            self.assertEqual(
+                classified["attributes"]["classification_basis"],
+                "browser_extension_state_catalog_id",
+            )
+
     def test_python_firefox_extension_inventory_and_classification(self) -> None:
         collector = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"
         spec = importlib.util.spec_from_file_location("shadow_ai_firefox_inventory", collector)

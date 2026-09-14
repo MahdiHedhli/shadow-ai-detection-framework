@@ -1,1 +1,3 @@
 discovered_on,extension_id,provider_id,browser,extension_name,discovery_url,listing_url,status,notes
+2026-09-14,epocbclmpeonmggbofkgoladdgjpbllg,anthropic,chromium-family,Claude alleged beta,,,unverified_external_suggestion,No authoritative listing or primary-source reference found; excluded from active detections pending publisher verification
+2026-09-14,pfmfdpbgogpobgfcbpljmdononnoedgd,openai,chromium-family,ChatGPT alleged pre-release,,,unverified_external_suggestion,No authoritative listing or primary-source reference found; excluded from active detections pending publisher verification

@@ -25,7 +25,7 @@ from urllib.parse import urlsplit
 
 
 COLLECTOR_NAME = "shadow-ai-rmm-macos-linux"
-COLLECTOR_VERSION = "0.6.3"
+COLLECTOR_VERSION = "0.6.4"
 MAX_FINDINGS = 5000
 MAX_HOMES = 256
 MAX_PROCESS_BYTES = 65536
@@ -526,8 +526,17 @@ def collect_chromium_extension_profile(
             for extension in sorted(extension_root.iterdir(), key=lambda item: item.name)[:1000]
             if EXTENSION_ID_RE.fullmatch(extension.name) and safe_exists(extension) and extension.is_dir()
         }
+    state_extension_ids: set[str] = set()
+    for state_directory_name in ("Local Extension Settings", "Sync Extension Settings"):
+        state_root = profile / state_directory_name
+        if not safe_exists(state_root) or not state_root.is_dir():
+            continue
+        for extension_id in known_extensions:
+            state_path = state_root / extension_id
+            if safe_exists(state_path) and state_path.is_dir():
+                state_extension_ids.add(extension_id)
     indexed_extensions = preference_extensions(profile)
-    extension_ids = set(extension_paths) | set(indexed_extensions)
+    extension_ids = set(extension_paths) | set(indexed_extensions) | state_extension_ids
     if not extension_ids:
         return
     installed_count = 0
@@ -544,7 +553,12 @@ def collect_chromium_extension_profile(
             extension_name = catalog_item["extension_name"]
             provider_id = catalog_item["provider_id"]
             confidence = "high" if extension is not None else "medium"
-            classification_basis = "catalog_id" if extension is not None else "browser_preferences_catalog_id"
+            if extension is not None:
+                classification_basis = "catalog_id"
+            elif extension_id in indexed_extensions:
+                classification_basis = "browser_preferences_catalog_id"
+            else:
+                classification_basis = "browser_extension_state_catalog_id"
         else:
             if extension is None:
                 preference_classification = preference_manifest_classification(indexed_extensions.get(extension_id))
