@@ -240,6 +240,19 @@ class RepositoryTests(unittest.TestCase):
             self.assertNotIn("extension_description", content, str(path))
             self.assertNotIn("extension_permissions", content, str(path))
 
+    def test_collectors_emit_privacy_safe_extension_coverage(self) -> None:
+        paths = [
+            ROOT / "templates" / "rmm-macos-linux" / "shadow_ai_inventory.py.tmpl",
+            ROOT / "templates" / "rmm-windows" / "ShadowAIInventory.ps1.tmpl",
+        ]
+        for path in paths:
+            content = path.read_text(encoding="utf-8").casefold()
+            self.assertIn("installed_extension_count", content, str(path))
+            self.assertIn("classified_extension_count", content, str(path))
+            self.assertIn("count_only", content, str(path))
+            for browser in ("firefox", "vivaldi", "arc", "opera"):
+                self.assertIn(browser, content, str(path))
+
     def test_python_extension_manifest_name_classification(self) -> None:
         collector = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"
         spec = importlib.util.spec_from_file_location("shadow_ai_extension_collector", collector)
@@ -267,6 +280,62 @@ class RepositoryTests(unittest.TestCase):
             )
             self.assertEqual(module.resolve_chromium_extension_name(root / "localized"), "Perplexity Assistant")
             self.assertIsNone(module.extension_name_classification("Ordinary bookmark helper"))
+
+    def test_python_extension_inventory_counts_do_not_disclose_unclassified_names(self) -> None:
+        collector = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"
+        spec = importlib.util.spec_from_file_location("shadow_ai_extension_inventory", collector)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as temporary:
+            profile = Path(temporary) / "Default"
+            extension = profile / "Extensions" / ("a" * 32) / "1.0.0"
+            extension.mkdir(parents=True)
+            (extension / "manifest.json").write_text(
+                '{"name":"Ordinary bookmark helper"}', encoding="utf-8"
+            )
+            document = module.new_document()
+            module.collect_chromium_extension_profile(document, "chrome", profile, "tester", {})
+            findings = document["findings"]
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["capability"], "browser_extension_inventory")
+            self.assertEqual(findings[0]["attributes"]["installed_extension_count"], 1)
+            self.assertEqual(findings[0]["attributes"]["classified_extension_count"], 0)
+            serialized = json.dumps(document)
+            self.assertNotIn("Ordinary bookmark helper", serialized)
+            self.assertNotIn("a" * 32, serialized)
+
+    def test_python_firefox_extension_inventory_and_classification(self) -> None:
+        collector = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"
+        spec = importlib.util.spec_from_file_location("shadow_ai_firefox_inventory", collector)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as temporary:
+            profile = Path(temporary) / "profile.default"
+            profile.mkdir(parents=True)
+            (profile / "extensions.json").write_text(
+                json.dumps(
+                    {
+                        "addons": [
+                            {"id": "claude@example.invalid", "type": "extension", "isSystem": False,
+                             "defaultLocale": {"name": "Claude in Firefox"}},
+                            {"id": "builtin@example.invalid", "type": "extension", "isSystem": True,
+                             "defaultLocale": {"name": "Claude Builtin"}},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            document = module.new_document()
+            module.collect_firefox_extension_profile(document, profile, "tester")
+            findings = document["findings"]
+            self.assertEqual(len(findings), 2)
+            classified = next(item for item in findings if item["capability"] == "ai_browser_extension")
+            inventory = next(item for item in findings if item["capability"] == "browser_extension_inventory")
+            self.assertEqual(classified["provider_id"], "anthropic")
+            self.assertEqual(inventory["attributes"]["installed_extension_count"], 1)
+            self.assertEqual(inventory["attributes"]["classified_extension_count"], 1)
 
     def test_python_history_matching_respects_hostname_boundaries(self) -> None:
         collector = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"
