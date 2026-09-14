@@ -25,7 +25,7 @@ from urllib.parse import urlsplit
 
 
 COLLECTOR_NAME = "shadow-ai-rmm-macos-linux"
-COLLECTOR_VERSION = "0.5.2"
+COLLECTOR_VERSION = "0.6.0"
 MAX_FINDINGS = 5000
 MAX_HOMES = 256
 MAX_PROCESS_BYTES = 65536
@@ -994,6 +994,43 @@ def extension_name_classification(extension_name: str | None) -> dict[str, str] 
     )
 
 
+def manifest_domain_classification(extension: Path) -> dict[str, str] | None:
+    """Classify locally from URL access declarations without emitting the manifest."""
+    try:
+        versions = [item for item in extension.iterdir() if safe_exists(item) and item.is_dir()]
+    except OSError:
+        return None
+    for version in sorted(versions, key=lambda item: item.name, reverse=True)[:8]:
+        manifest = read_bounded_json(version / "manifest.json")
+        if not isinstance(manifest, dict):
+            continue
+        access_values: list[str] = []
+        for key in ("permissions", "host_permissions", "optional_host_permissions"):
+            value = manifest.get(key)
+            if isinstance(value, list):
+                access_values.extend(item for item in value if isinstance(item, str))
+        content_scripts = manifest.get("content_scripts")
+        if isinstance(content_scripts, list):
+            for script in content_scripts:
+                if not isinstance(script, dict):
+                    continue
+                matches = script.get("matches")
+                if isinstance(matches, list):
+                    access_values.extend(item for item in matches if isinstance(item, str))
+        externally_connectable = manifest.get("externally_connectable")
+        if isinstance(externally_connectable, dict):
+            matches = externally_connectable.get("matches")
+            if isinstance(matches, list):
+                access_values.extend(item for item in matches if isinstance(item, str))
+        for indicator in DOMAIN_CATALOG:
+            escaped = re.escape(indicator["domain"])
+            host = rf"(?:[a-z0-9-]+\.)*{escaped}" if indicator["indicator_type"] == "registered_domain" else escaped
+            pattern = re.compile(rf"(?i)(?:^|[/:*.]){host}(?:[/:*]|$)")
+            if any(pattern.search(value) for value in access_values):
+                return indicator
+    return None
+
+
 def add_extension_inventory_summary(
     document: dict[str, object],
     browser: str,
@@ -1050,19 +1087,33 @@ def collect_chromium_extension_profile(
             if classification:
                 provider_id = classification["provider_id"]
                 confidence = classification["confidence"]
-        if provider_id is None or extension_name is None:
+        matched_domain: str | None = None
+        if provider_id is None:
+            domain_classification = manifest_domain_classification(extension)
+            if domain_classification:
+                provider_id = domain_classification["provider_id"]
+                confidence = "medium"
+                classification_basis = "manifest_domain_local_only"
+                matched_domain = domain_classification["domain"]
+        if provider_id is None:
             continue
+        attributes: dict[str, object] = {
+            "browser": browser,
+            "profile": profile.name,
+            "extension_id": extension.name,
+            "classification_basis": classification_basis,
+            "presence_only": True,
+        }
+        if extension_name is not None:
+            attributes["extension_name"] = extension_name
+        if matched_domain is not None:
+            attributes["matched_domain"] = matched_domain
         add_finding(
             document,
             "browser_extension",
             synthetic("browser-" + extension.name, provider_id, "ai_browser_extension", confidence),
             user,
-            browser=browser,
-            profile=profile.name,
-            extension_id=extension.name,
-            extension_name=extension_name,
-            classification_basis=classification_basis,
-            presence_only=True,
+            **attributes,
         )
         classified_count += 1
     add_extension_inventory_summary(

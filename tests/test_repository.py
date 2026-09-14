@@ -240,6 +240,7 @@ class RepositoryTests(unittest.TestCase):
             content = path.read_text(encoding="utf-8")
             self.assertIn("BROWSER_EXTENSION_NAME_CATALOG_JSON", content, str(path))
             self.assertIn("manifest_name_local_only", content, str(path))
+            self.assertIn("manifest_domain_local_only", content, str(path))
             normalized = content.casefold().replace("_", "")
             self.assertIn("maxmanifest", normalized, str(path))
             self.assertNotIn("extension_description", content, str(path))
@@ -285,6 +286,24 @@ class RepositoryTests(unittest.TestCase):
             )
             self.assertEqual(module.resolve_chromium_extension_name(root / "localized"), "Perplexity Assistant")
             self.assertIsNone(module.extension_name_classification("Ordinary bookmark helper"))
+
+            domain_version = root / "domain" / "3.0.0"
+            domain_version.mkdir(parents=True)
+            (domain_version / "manifest.json").write_text(
+                '{"name":"Opaque Helper","host_permissions":["https://*.claude.ai/*"]}',
+                encoding="utf-8",
+            )
+            domain_match = module.manifest_domain_classification(root / "domain")
+            self.assertIsNotNone(domain_match)
+            self.assertEqual(domain_match["provider_id"], "anthropic")
+
+            ordinary_version = root / "ordinary-domain" / "1.0.0"
+            ordinary_version.mkdir(parents=True)
+            (ordinary_version / "manifest.json").write_text(
+                '{"name":"Ordinary","permissions":["storage"],"content_scripts":[{"matches":["https://example.com/*"]}]}',
+                encoding="utf-8",
+            )
+            self.assertIsNone(module.manifest_domain_classification(root / "ordinary-domain"))
 
     def test_python_extension_inventory_counts_do_not_disclose_unclassified_names(self) -> None:
         collector = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"
