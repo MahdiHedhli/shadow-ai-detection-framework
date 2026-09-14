@@ -46,6 +46,8 @@ class RepositoryTests(unittest.TestCase):
         extension_ids = {row["extension_id"]: row for row in browser_extensions}
         self.assertEqual(extension_ids["fcoeoabgfenejglbffodgkkbkcdhcgfn"]["provider_id"], "anthropic")
         self.assertEqual(extension_ids["ejcfepkfckglbgocfkanmcdngdijcgld"]["provider_id"], "openai")
+        self.assertEqual(extension_ids["fcoeoabgfenejglbffodgkkbkcdhcgfn"]["browser"], "chromium-family")
+        self.assertEqual(extension_ids["ejcfepkfckglbgocfkanmcdngdijcgld"]["browser"], "chromium-family")
 
     def test_browser_extension_name_patterns_are_specific(self) -> None:
         rows = build.read_csv(
