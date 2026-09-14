@@ -25,13 +25,14 @@ from urllib.parse import urlsplit
 
 
 COLLECTOR_NAME = "shadow-ai-rmm-macos-linux"
-COLLECTOR_VERSION = "0.6.1"
+COLLECTOR_VERSION = "0.6.2"
 MAX_FINDINGS = 5000
 MAX_HOMES = 256
 MAX_PROCESS_BYTES = 65536
 MAX_HISTORY_BYTES_PER_PROFILE = 268435456
 MAX_HISTORY_ROWS_PER_PROFILE = 1000000
 MAX_MANIFEST_BYTES = 1048576
+MAX_BROWSER_PREFERENCE_BYTES = 16777216
 EXTENSION_ID_RE = re.compile(r"^[a-p]{32}$")
 CATALOG = {{ENDPOINT_CATALOG_JSON}}
 BROWSER_EXTENSION_CATALOG = {{BROWSER_EXTENSION_CATALOG_JSON}}
@@ -259,9 +260,9 @@ def collect_known_paths(document: dict[str, object], homes: list[tuple[str, Path
             add_finding(document, "software", indicator, None, location=tokenize_path(path, None), presence_only=True)
 
 
-def read_bounded_json(path: Path) -> object | None:
+def read_bounded_json(path: Path, max_bytes: int = MAX_MANIFEST_BYTES) -> object | None:
     try:
-        if not safe_exists(path) or not path.is_file() or path.stat().st_size > MAX_MANIFEST_BYTES:
+        if not safe_exists(path) or not path.is_file() or path.stat().st_size > max_bytes:
             return None
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
@@ -431,6 +432,22 @@ def add_extension_inventory_summary(
     )
 
 
+def known_preference_extension_ids(
+    profile: Path, known_extensions: dict[str, dict[str, str]]
+) -> set[str]:
+    matches: set[str] = set()
+    for preference_name in ("Preferences", "Secure Preferences"):
+        document = read_bounded_json(profile / preference_name, MAX_BROWSER_PREFERENCE_BYTES)
+        if not isinstance(document, dict):
+            continue
+        extensions = document.get("extensions")
+        settings = extensions.get("settings") if isinstance(extensions, dict) else None
+        if not isinstance(settings, dict):
+            continue
+        matches.update(extension_id for extension_id in known_extensions if extension_id in settings)
+    return matches
+
+
 def collect_chromium_extension_profile(
     document: dict[str, object],
     browser: str,
@@ -439,15 +456,22 @@ def collect_chromium_extension_profile(
     known_extensions: dict[str, dict[str, str]],
 ) -> None:
     extension_root = profile / "Extensions"
-    if not safe_exists(extension_root):
+    extension_paths: dict[str, Path] = {}
+    if safe_exists(extension_root):
+        extension_paths = {
+            extension.name: extension
+            for extension in sorted(extension_root.iterdir(), key=lambda item: item.name)[:1000]
+            if EXTENSION_ID_RE.fullmatch(extension.name) and safe_exists(extension) and extension.is_dir()
+        }
+    extension_ids = set(extension_paths) | known_preference_extension_ids(profile, known_extensions)
+    if not extension_ids:
         return
     installed_count = 0
     classified_count = 0
-    for extension in sorted(extension_root.iterdir(), key=lambda item: item.name)[:1000]:
-        if not (EXTENSION_ID_RE.fullmatch(extension.name) and safe_exists(extension) and extension.is_dir()):
-            continue
+    for extension_id in sorted(extension_ids):
         installed_count += 1
-        catalog_item = known_extensions.get(extension.name)
+        extension = extension_paths.get(extension_id)
+        catalog_item = known_extensions.get(extension_id)
         extension_name: str | None = None
         provider_id: str | None = None
         confidence = "medium"
@@ -455,9 +479,11 @@ def collect_chromium_extension_profile(
         if catalog_item and catalog_item["browser"] in {browser, "chromium-family"}:
             extension_name = catalog_item["extension_name"]
             provider_id = catalog_item["provider_id"]
-            confidence = "high"
-            classification_basis = "catalog_id"
+            confidence = "high" if extension is not None else "medium"
+            classification_basis = "catalog_id" if extension is not None else "browser_preferences_catalog_id"
         else:
+            if extension is None:
+                continue
             extension_name = resolve_chromium_extension_name(extension)
             classification = extension_name_classification(extension_name)
             if classification:
@@ -482,7 +508,7 @@ def collect_chromium_extension_profile(
         attributes: dict[str, object] = {
             "browser": browser,
             "profile": profile.name,
-            "extension_id": extension.name,
+            "extension_id": extension_id,
             "classification_basis": classification_basis,
             "presence_only": True,
         }
@@ -493,7 +519,7 @@ def collect_chromium_extension_profile(
         add_finding(
             document,
             "browser_extension",
-            synthetic("browser-" + extension.name, provider_id, "ai_browser_extension", confidence),
+            synthetic("browser-" + extension_id, provider_id, "ai_browser_extension", confidence),
             user,
             **attributes,
         )

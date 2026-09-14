@@ -22,7 +22,7 @@ param([switch]$SelfTest)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $CollectorName = 'shadow-ai-rmm-windows'
-$CollectorVersion = '0.6.1'
+$CollectorVersion = '0.6.2'
 $MaxFindings = 5000
 $ExtensionIdPattern = '^[a-p]{32}$'
 $CatalogJson = @'
@@ -255,6 +255,12 @@ $BrowserCatalogJson = @'
     "extension_id": "fcoeoabgfenejglbffodgkkbkcdhcgfn",
     "extension_name": "Claude",
     "provider_id": "anthropic"
+  },
+  {
+    "browser": "chromium-family",
+    "extension_id": "hehggadaopoacecdllhhajmbjkdcmajg",
+    "extension_name": "ChatGPT",
+    "provider_id": "openai"
   },
   {
     "browser": "chromium-family",
@@ -721,6 +727,7 @@ $DomainCatalogJson = @'
 $DomainCatalog = @($DomainCatalogJson | ConvertFrom-Json)
 $MaxHistoryBytesPerProfile = 268435456
 $MaxManifestBytes = 1048576
+$MaxBrowserPreferenceBytes = 16777216
 
 function Get-IsoTimestamp {
     return [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
@@ -1194,11 +1201,14 @@ function Collect-BrowserHistory {
 }
 
 function Read-BoundedJsonObject {
-    param([Parameter(Mandatory = $true)][string]$LiteralPath)
+    param(
+        [Parameter(Mandatory = $true)][string]$LiteralPath,
+        [int64]$MaxBytes = $MaxManifestBytes
+    )
     if (-not (Test-SafePath -LiteralPath $LiteralPath)) { return $null }
     try {
         $item = Get-Item -LiteralPath $LiteralPath -Force -ErrorAction Stop
-        if ($item.PSIsContainer -or $item.Length -gt $MaxManifestBytes) { return $null }
+        if ($item.PSIsContainer -or $item.Length -gt $MaxBytes) { return $null }
         return ([IO.File]::ReadAllText($item.FullName) | ConvertFrom-Json -ErrorAction Stop)
     } catch {
         return $null
@@ -1373,6 +1383,28 @@ function Add-ExtensionInventorySummary {
     }
 }
 
+function Get-KnownPreferenceExtensionIds {
+    param(
+        [Parameter(Mandatory = $true)]$BrowserProfile,
+        [Parameter(Mandatory = $true)][hashtable]$KnownExtensions
+    )
+    $matchedIds = @{}
+    foreach ($preferenceName in @('Preferences', 'Secure Preferences')) {
+        $preferenceDocument = Read-BoundedJsonObject -LiteralPath (Join-Path -Path $BrowserProfile.FullName -ChildPath $preferenceName) -MaxBytes $MaxBrowserPreferenceBytes
+        if ($null -eq $preferenceDocument) { continue }
+        $extensions = Get-OptionalPropertyValue -InputObject $preferenceDocument -Name 'extensions'
+        if ($null -eq $extensions) { continue }
+        $settings = Get-OptionalPropertyValue -InputObject $extensions -Name 'settings'
+        if ($null -eq $settings) { continue }
+        foreach ($knownId in @($KnownExtensions.Keys)) {
+            if ($null -ne $settings.PSObject.Properties[[string]$knownId]) {
+                $matchedIds[[string]$knownId] = $true
+            }
+        }
+    }
+    return @($matchedIds.Keys)
+}
+
 function Collect-ChromiumExtensionProfile {
     param(
         [Parameter(Mandatory = $true)][string]$Browser,
@@ -1381,40 +1413,55 @@ function Collect-ChromiumExtensionProfile {
         [Parameter(Mandatory = $true)][hashtable]$KnownExtensions
     )
     $extensionRoot = Join-Path -Path $BrowserProfile.FullName -ChildPath 'Extensions'
-    if (-not (Test-SafePath -LiteralPath $extensionRoot)) { return }
+    $extensionPaths = @{}
+    if (Test-SafePath -LiteralPath $extensionRoot) {
+        foreach ($extension in @(Get-ChildItem -LiteralPath $extensionRoot -Directory -Force -ErrorAction Stop | Select-Object -First 1000)) {
+            if (
+                $extension.Name -match $ExtensionIdPattern -and
+                (($extension.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)
+            ) {
+                $extensionPaths[[string]$extension.Name] = $extension
+            }
+        }
+    }
+    $extensionIds = @{}
+    foreach ($extensionId in @($extensionPaths.Keys)) { $extensionIds[[string]$extensionId] = $true }
+    foreach ($extensionId in @(Get-KnownPreferenceExtensionIds -BrowserProfile $BrowserProfile -KnownExtensions $KnownExtensions)) {
+        $extensionIds[[string]$extensionId] = $true
+    }
+    if ($extensionIds.Count -eq 0) { return }
     $installedCount = 0
     $classifiedCount = 0
-    foreach ($extension in @(Get-ChildItem -LiteralPath $extensionRoot -Directory -Force -ErrorAction Stop | Select-Object -First 1000)) {
-        if (
-            $extension.Name -notmatch $ExtensionIdPattern -or
-            (($extension.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)
-        ) { continue }
+    foreach ($extensionId in @($extensionIds.Keys | Sort-Object)) {
         $installedCount += 1
-        $known = $KnownExtensions[[string]$extension.Name]
+        $extension = $extensionPaths[[string]$extensionId]
+        $known = $KnownExtensions[[string]$extensionId]
         if (
             $null -ne $known -and
             $known.browser -in @($Browser, 'chromium-family')
         ) {
-            $indicator = New-SyntheticIndicator ('browser-' + $extension.Name) $known.provider_id 'ai_browser_extension' 'high'
+            $catalogConfidence = if ($null -ne $extension) { 'high' } else { 'medium' }
+            $indicator = New-SyntheticIndicator ('browser-' + $extensionId) $known.provider_id 'ai_browser_extension' $catalogConfidence
             Add-Finding -Category 'browser_extension' -Indicator $indicator -SubjectUser $SubjectUser -Attributes @{
                 browser = $Browser
                 profile = $BrowserProfile.Name
-                extension_id = $extension.Name
+                extension_id = $extensionId
                 extension_name = $known.extension_name
-                classification_basis = 'catalog_id'
+                classification_basis = if ($null -ne $extension) { 'catalog_id' } else { 'browser_preferences_catalog_id' }
                 presence_only = $true
             }
             $classifiedCount += 1
             continue
         }
+        if ($null -eq $extension) { continue }
         $resolvedName = Resolve-ChromiumExtensionName -ExtensionPath $extension.FullName
         $classification = Find-ExtensionNameClassification -ExtensionName $resolvedName
         if ($null -ne $classification) {
-            $indicator = New-SyntheticIndicator ('browser-' + $extension.Name) $classification.provider_id 'ai_browser_extension' $classification.confidence
+            $indicator = New-SyntheticIndicator ('browser-' + $extensionId) $classification.provider_id 'ai_browser_extension' $classification.confidence
             Add-Finding -Category 'browser_extension' -Indicator $indicator -SubjectUser $SubjectUser -Attributes @{
                 browser = $Browser
                 profile = $BrowserProfile.Name
-                extension_id = $extension.Name
+                extension_id = $extensionId
                 extension_name = $resolvedName
                 classification_basis = 'manifest_name_local_only'
                 presence_only = $true
@@ -1424,11 +1471,11 @@ function Collect-ChromiumExtensionProfile {
         }
         $textClassification = Find-ManifestTextClassification -ExtensionPath $extension.FullName
         if ($null -ne $textClassification) {
-            $indicator = New-SyntheticIndicator ('browser-' + $extension.Name) $textClassification.provider_id 'ai_browser_extension' $textClassification.confidence
+            $indicator = New-SyntheticIndicator ('browser-' + $extensionId) $textClassification.provider_id 'ai_browser_extension' $textClassification.confidence
             $attributes = @{
                 browser = $Browser
                 profile = $BrowserProfile.Name
-                extension_id = $extension.Name
+                extension_id = $extensionId
                 classification_basis = 'manifest_text_local_only'
                 presence_only = $true
             }
@@ -1439,11 +1486,11 @@ function Collect-ChromiumExtensionProfile {
         }
         $domainClassification = Find-ManifestDomainClassification -ExtensionPath $extension.FullName
         if ($null -ne $domainClassification) {
-            $indicator = New-SyntheticIndicator ('browser-' + $extension.Name) $domainClassification.provider_id 'ai_browser_extension' 'medium'
+            $indicator = New-SyntheticIndicator ('browser-' + $extensionId) $domainClassification.provider_id 'ai_browser_extension' 'medium'
             Add-Finding -Category 'browser_extension' -Indicator $indicator -SubjectUser $SubjectUser -Attributes @{
                 browser = $Browser
                 profile = $BrowserProfile.Name
-                extension_id = $extension.Name
+                extension_id = $extensionId
                 matched_domain = [string]$domainClassification.domain
                 classification_basis = 'manifest_domain_local_only'
                 presence_only = $true

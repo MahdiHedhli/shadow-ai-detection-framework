@@ -6,6 +6,10 @@
       "sha256": "bce30fa375e510435785b46659a6536baf6f7c1254df133137ee2a498a1d09f0"
     },
     {
+      "path": "catalog/browser_extension_history.csv",
+      "sha256": "c32d0dca5598bcea7cdd72faf0b312ecfeca3dca6b4c3d80765bac34d8ca623a"
+    },
+    {
       "path": "microsoft-defender/01-ai-domain-access.kql",
       "sha256": "3c7013ee1345c716528413d4e589a7cf92ca78d64ff5ed00eebe2111205636d1"
     },
@@ -51,11 +55,11 @@
     },
     {
       "path": "rmm-macos-linux/shadow_ai_inventory.py",
-      "sha256": "a38ba4c11201a0930e8b4cd6d08bee3a9f0d14e0aad948d7e3ec63d13e99fb8e"
+      "sha256": "2095d81ab76d2fa384ab0e005fedae751c2ef1cfd5904ed79c7d73651e9369d3"
     },
     {
       "path": "rmm-windows/ShadowAIInventory.ps1",
-      "sha256": "bf72a89c62c8897c7179040814da107057a10058c6cb6536eaf2776451b01c19"
+      "sha256": "8aab3d3b68883f7752de2af29c7882d30e55e3407716052bba2f88643bac3b0d"
     },
     {
       "path": "watchlists/shadow_ai_domains.csv",

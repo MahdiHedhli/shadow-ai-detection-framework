@@ -15,6 +15,8 @@ This register distinguishes material that may be adapted from material that is o
 | [Microsoft: Get-AppxPackage](https://learn.microsoft.com/en-us/powershell/module/appx/get-appxpackage) | Microsoft documentation terms | Enumerate installed MSIX/AppX packages across user profiles | Factual implementation reference; no code copied |
 | [Anthropic Claude Code issue 36079](https://github.com/anthropics/claude-code/issues/36079) | User-submitted issue in Anthropic's public repository | Validate bounded legacy and MSIX Claude Desktop paths | Reference only; no issue text or code copied |
 | [Chrome Web Store](https://chromewebstore.google.com/) | Google service terms; listing facts are not copied as code | Validate exact extension IDs and publisher-facing names | Factual indicators only; revalidate regularly |
+| [Anthropic Claude extension](https://chromewebstore.google.com/detail/claude/fcoeoabgfenejglbffodgkkbkcdhcgfn) | Google service terms | Validate the current official Claude extension ID and publisher | Factual indicator only |
+| [OpenAI ChatGPT extension](https://chromewebstore.google.com/detail/chatgpt/hehggadaopoacecdllhhajmbjkdcmajg) | Google service terms | Validate the current official ChatGPT extension ID and publisher | Factual indicator only |
 | [LocalMCPInventory](https://github.com/kannanprabu/LocalMCPInventory) | No license found | MCP discovery research | Reference only; do not copy |
 | [shadow-ai-detection-kql](https://github.com/ycarmack2647/shadow-ai-detection-kql) | No license found | Detection research | Reference only; do not copy |
 | [SecretsNShadows](https://github.com/samikroy/SecretsNShadows) | No license found | Detection research | Reference only; do not copy |

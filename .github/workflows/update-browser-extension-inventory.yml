@@ -1,0 +1,53 @@
+name: Update browser extension inventory
+
+on:
+  schedule:
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: browser-extension-inventory
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Revalidate extension listings
+        run: python3 tools/update_browser_extension_history.py --timeout 20
+
+      - name: Rebuild and test
+        run: |
+          python3 tools/build.py
+          python3 -m unittest discover -s tests -v
+
+      - name: Create a review pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No inventory changes."
+            exit 0
+          fi
+          run_date="$(date -u +%F)"
+          branch="automation/browser-extension-inventory-${run_date}-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add catalog/browser_extension_history.csv catalog/browser_extension_candidates.csv dist/manifest.json dist/catalog/browser_extension_history.csv
+          git commit -m "Update browser extension inventory ${run_date}"
+          git push --set-upstream origin "$branch"
+          gh pr create \
+            --base "$GITHUB_REF_NAME" \
+            --head "$branch" \
+            --title "Browser extension inventory: ${run_date}" \
+            --body "Weekly listing revalidation and historical snapshot. Any candidate ID remains review-required and must not enter the active catalog until its publisher is manually verified."

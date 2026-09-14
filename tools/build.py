@@ -63,6 +63,18 @@ BROWSER_EXTENSION_NAME_REQUIRED = {
     "last_validated",
     "notes",
 }
+BROWSER_EXTENSION_HISTORY_REQUIRED = {
+    "observed_on",
+    "extension_id",
+    "provider_id",
+    "browser",
+    "extension_name",
+    "source_url",
+    "verification_status",
+    "observed_url",
+    "http_status",
+    "notes",
+}
 SPEC_REQUIRED = {
     "id",
     "title",
@@ -218,6 +230,34 @@ def validate_browser_extension_names(rows: list[dict[str, str]]) -> None:
             raise ValidationError(f"{context}: unsupported confidence")
         validate_source_url(row["source_url"], context)
         validate_date(row["last_validated"], context)
+
+
+def validate_browser_extension_history(rows: list[dict[str, str]]) -> None:
+    allowed_statuses = {
+        "catalog_baseline",
+        "verified_official_listing",
+        "reachable_id_confirmed",
+        "redirected_id_review_required",
+        "unreachable",
+        "unconfirmed",
+    }
+    seen: set[tuple[str, str]] = set()
+    for row in rows:
+        context = f"{row['observed_on']}:{row['extension_id']}"
+        validate_date(row["observed_on"], context)
+        if not CHROMIUM_EXTENSION_ID_RE.fullmatch(row["extension_id"]):
+            raise ValidationError(f"{context}: invalid Chromium extension_id")
+        key = (row["observed_on"], row["extension_id"])
+        if key in seen:
+            raise ValidationError(f"{context}: duplicate daily history observation")
+        seen.add(key)
+        if row["verification_status"] not in allowed_statuses:
+            raise ValidationError(f"{context}: unsupported verification_status")
+        validate_source_url(row["source_url"], context)
+        if row["observed_url"]:
+            validate_source_url(row["observed_url"], context)
+        if row["http_status"] and (not row["http_status"].isdigit() or not 100 <= int(row["http_status"]) <= 599):
+            raise ValidationError(f"{context}: invalid http_status")
 
 
 def validate_specs() -> list[dict[str, object]]:
@@ -447,20 +487,30 @@ def main() -> int:
     browser_extension_names = read_csv(
         CATALOG_DIR / "browser_extension_name_patterns.csv", BROWSER_EXTENSION_NAME_REQUIRED
     )
+    browser_extension_history = read_csv(
+        CATALOG_DIR / "browser_extension_history.csv", BROWSER_EXTENSION_HISTORY_REQUIRED
+    )
     validate_domains(domains)
     validate_artifacts(artifacts)
     validate_browser_extensions(browser_extensions)
     validate_browser_extension_names(browser_extension_names)
+    validate_browser_extension_history(browser_extension_history)
     specs = validate_specs()
     tokens = build_tokens(domains, artifacts, browser_extensions, browser_extension_names)
     paths = render_templates(tokens)
     paths.append(build_watchlist(domains))
     safe_write(Path("catalog") / "ai_domains.txt", "\n".join(sorted(row["indicator"] for row in domains)) + "\n")
     paths.append(Path("catalog") / "ai_domains.txt")
+    safe_write(
+        Path("catalog") / "browser_extension_history.csv",
+        (CATALOG_DIR / "browser_extension_history.csv").read_text(encoding="utf-8"),
+    )
+    paths.append(Path("catalog") / "browser_extension_history.csv")
     build_manifest(paths, specs)
     print(
         f"Validated {len(domains)} network indicators, {len(artifacts)} endpoint artifacts, "
         f"{len(browser_extensions)} browser extensions, {len(browser_extension_names)} extension name patterns, "
+        f"{len(browser_extension_history)} extension history observations, "
         f"and {len(specs)} detections."
     )
     print(f"Built {len(paths)} artifacts under {DIST_DIR}.")
