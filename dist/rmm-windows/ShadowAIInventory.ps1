@@ -22,7 +22,7 @@ param([switch]$SelfTest)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $CollectorName = 'shadow-ai-rmm-windows'
-$CollectorVersion = '0.3.0'
+$CollectorVersion = '0.4.0'
 $MaxFindings = 5000
 $ExtensionIdPattern = '^[a-p]{32}$'
 $CatalogJson = @'
@@ -259,6 +259,161 @@ $BrowserCatalogJson = @'
 ]
 '@
 $BrowserExtensionCatalog = @($BrowserCatalogJson | ConvertFrom-Json)
+$BrowserNameCatalogJson = @'
+[
+  {
+    "confidence": "medium",
+    "pattern": "Microsoft Copilot",
+    "provider_id": "microsoft"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "GitHub Copilot",
+    "provider_id": "github"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Character.AI",
+    "provider_id": "characterai"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Blackbox AI",
+    "provider_id": "blackbox"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Compose AI",
+    "provider_id": "compose-ai"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Perplexity",
+    "provider_id": "perplexity"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Writesonic",
+    "provider_id": "writesonic"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "ChatSonic",
+    "provider_id": "writesonic"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Consensus",
+    "provider_id": "consensus"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Grammarly",
+    "provider_id": "grammarly"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Amazon Q",
+    "provider_id": "amazon"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "DeepSeek",
+    "provider_id": "deepseek"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "QuillBot",
+    "provider_id": "quillbot"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "SciSpace",
+    "provider_id": "scispace"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Windsurf",
+    "provider_id": "windsurf"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "ChatGPT",
+    "provider_id": "openai"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Codeium",
+    "provider_id": "codeium"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Mistral",
+    "provider_id": "mistral"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Tabnine",
+    "provider_id": "tabnine"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Claude",
+    "provider_id": "anthropic"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Gemini",
+    "provider_id": "google"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Jasper",
+    "provider_id": "jasper"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Merlin",
+    "provider_id": "merlin"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Monica",
+    "provider_id": "monica"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "OpenAI",
+    "provider_id": "openai"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "HARPA",
+    "provider_id": "harpa"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "MaxAI",
+    "provider_id": "maxai"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Phind",
+    "provider_id": "phind"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Sider",
+    "provider_id": "sider"
+  },
+  {
+    "confidence": "medium",
+    "pattern": "Grok",
+    "provider_id": "xai"
+  }
+]
+'@
+$BrowserExtensionNameCatalog = @($BrowserNameCatalogJson | ConvertFrom-Json)
 $DomainCatalogJson = @'
 [
   {
@@ -553,6 +708,7 @@ $DomainCatalogJson = @'
 '@
 $DomainCatalog = @($DomainCatalogJson | ConvertFrom-Json)
 $MaxHistoryBytesPerProfile = 268435456
+$MaxManifestBytes = 1048576
 
 function Get-IsoTimestamp {
     return [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
@@ -1025,6 +1181,66 @@ function Collect-BrowserHistory {
     }
 }
 
+function Read-BoundedJsonObject {
+    param([Parameter(Mandatory = $true)][string]$LiteralPath)
+    if (-not (Test-SafePath -LiteralPath $LiteralPath)) { return $null }
+    try {
+        $item = Get-Item -LiteralPath $LiteralPath -Force -ErrorAction Stop
+        if ($item.PSIsContainer -or $item.Length -gt $MaxManifestBytes) { return $null }
+        return ([IO.File]::ReadAllText($item.FullName) | ConvertFrom-Json -ErrorAction Stop)
+    } catch {
+        return $null
+    }
+}
+
+function Get-SafeExtensionName {
+    param([AllowNull()][string]$Value)
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $null }
+    $name = $Value.Trim()
+    if ($name.Length -gt 200 -or $name -match '[\x00-\x1f\x7f]') { return $null }
+    return $name
+}
+
+function Resolve-ChromiumExtensionName {
+    param([Parameter(Mandatory = $true)][string]$ExtensionPath)
+    try {
+        foreach ($versionDirectory in @(Get-ChildItem -LiteralPath $ExtensionPath -Directory -Force -ErrorAction Stop |
+            Where-Object { ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 } |
+            Sort-Object -Property Name -Descending | Select-Object -First 8)) {
+            $manifest = Read-BoundedJsonObject -LiteralPath (Join-Path -Path $versionDirectory.FullName -ChildPath 'manifest.json')
+            if ($null -eq $manifest) { continue }
+            $name = Get-SafeExtensionName -Value ([string](Get-OptionalPropertyValue -InputObject $manifest -Name 'name'))
+            if ($null -eq $name) { continue }
+            if ($name -match '^__MSG_([A-Za-z0-9_@]+)__$') {
+                $messageKey = $Matches[1]
+                $defaultLocale = Get-SafeExtensionName -Value ([string](Get-OptionalPropertyValue -InputObject $manifest -Name 'default_locale'))
+                if ($null -eq $defaultLocale -or $defaultLocale -notmatch '^[A-Za-z0-9_-]{2,20}$') { continue }
+                $messagesPath = Join-Path -Path $versionDirectory.FullName -ChildPath ('_locales\{0}\messages.json' -f $defaultLocale)
+                $messages = Read-BoundedJsonObject -LiteralPath $messagesPath
+                if ($null -eq $messages) { continue }
+                $messageObject = Get-OptionalPropertyValue -InputObject $messages -Name $messageKey
+                if ($null -eq $messageObject) { continue }
+                $name = Get-SafeExtensionName -Value ([string](Get-OptionalPropertyValue -InputObject $messageObject -Name 'message'))
+            }
+            if ($null -ne $name) { return $name }
+        }
+    } catch {
+        return $null
+    }
+    return $null
+}
+
+function Find-ExtensionNameClassification {
+    param([AllowNull()][string]$ExtensionName)
+    if ([string]::IsNullOrWhiteSpace($ExtensionName)) { return $null }
+    foreach ($mapping in $BrowserExtensionNameCatalog) {
+        if ($ExtensionName.IndexOf([string]$mapping.pattern, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            return $mapping
+        }
+    }
+    return $null
+}
+
 function Collect-BrowserExtensions {
     param([AllowEmptyCollection()][object[]]$Profiles)
     $knownExtensions = @{}
@@ -1044,12 +1260,14 @@ function Collect-BrowserExtensions {
                     $extensionRoot = Join-Path -Path $browserProfile.FullName -ChildPath 'Extensions'
                     if (-not (Test-SafePath -LiteralPath $extensionRoot)) { continue }
                     foreach ($extension in @(Get-ChildItem -LiteralPath $extensionRoot -Directory -Force -ErrorAction Stop | Select-Object -First 1000)) {
+                        if (
+                            $extension.Name -notmatch $ExtensionIdPattern -or
+                            (($extension.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)
+                        ) { continue }
                         $known = $knownExtensions[[string]$extension.Name]
                         if (
                             $null -ne $known -and
-                            $known.browser -in @($browser.Browser, 'chromium-family') -and
-                            $extension.Name -match $ExtensionIdPattern -and
-                            (($extension.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)
+                            $known.browser -in @($browser.Browser, 'chromium-family')
                         ) {
                             $indicator = New-SyntheticIndicator ('browser-' + $extension.Name) $known.provider_id 'ai_browser_extension' 'high'
                             Add-Finding -Category 'browser_extension' -Indicator $indicator -SubjectUser $profile.User -Attributes @{
@@ -1057,6 +1275,22 @@ function Collect-BrowserExtensions {
                                 profile = $browserProfile.Name
                                 extension_id = $extension.Name
                                 extension_name = $known.extension_name
+                                classification_basis = 'catalog_id'
+                                presence_only = $true
+                            }
+                            continue
+                        }
+                        $resolvedName = Resolve-ChromiumExtensionName -ExtensionPath $extension.FullName
+                        $classification = Find-ExtensionNameClassification -ExtensionName $resolvedName
+                        if ($null -ne $classification) {
+                            $indicator = New-SyntheticIndicator ('browser-' + $extension.Name) $classification.provider_id 'ai_browser_extension' $classification.confidence
+                            Add-Finding -Category 'browser_extension' -Indicator $indicator -SubjectUser $profile.User -Attributes @{
+                                browser = $browser.Browser
+                                profile = $browserProfile.Name
+                                extension_id = $extension.Name
+                                extension_name = $resolvedName
+                                classification_basis = 'manifest_name_local_only'
+                                presence_only = $true
                             }
                         }
                     }

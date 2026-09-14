@@ -13,7 +13,7 @@ The endpoint indicator array inside each collector is generated from `catalog/en
 
 ## Privacy and security boundary
 
-The collectors inspect process metadata and a bounded set of known application, model, MCP configuration, Chromium extension, and browser-history locations for every discovered local user profile. Browser extension findings are emitted only for exact IDs in `catalog/browser_extensions.csv`; unrelated extensions are not reported. They do not perform a whole-disk search or follow symbolic links/reparse points.
+The collectors inspect process metadata and a bounded set of known application, model, MCP configuration, Chromium extension, and browser-history locations for every discovered local user profile. Browser extensions are classified locally using exact IDs from `catalog/browser_extensions.csv` first, then specific product-name patterns from `catalog/browser_extension_name_patterns.csv`. Only matched extension metadata is emitted; unrelated extension IDs, names, permissions, descriptions, and manifest contents are not reported. Exact-ID matches are high confidence, while manifest-name fallback matches are medium confidence. The collectors do not perform a whole-disk search or follow symbolic links/reparse points.
 
 On Windows, installed-software coverage combines machine uninstall keys, the current-user key, uninstall keys from user hives that Windows already has loaded, `Get-AppxPackage -AllUsers`, and bounded known application locations. The collector never loads offline user registry hives. Current Claude Desktop deployments are detected through their `Claude` MSIX package; the bounded `%LOCALAPPDATA%\AnthropicClaude` check covers the legacy standalone installer.
 

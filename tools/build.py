@@ -55,6 +55,14 @@ BROWSER_EXTENSION_REQUIRED = {
     "last_validated",
     "notes",
 }
+BROWSER_EXTENSION_NAME_REQUIRED = {
+    "pattern",
+    "provider_id",
+    "confidence",
+    "source_url",
+    "last_validated",
+    "notes",
+}
 SPEC_REQUIRED = {
     "id",
     "title",
@@ -193,6 +201,25 @@ def validate_browser_extensions(rows: list[dict[str, str]]) -> None:
         validate_date(row["last_validated"], context)
 
 
+def validate_browser_extension_names(rows: list[dict[str, str]]) -> None:
+    patterns: set[str] = set()
+    for row in rows:
+        context = row.get("pattern") or "browser extension name row"
+        folded = context.casefold()
+        if folded in patterns:
+            raise ValidationError(f"{context}: duplicate browser extension name pattern")
+        patterns.add(folded)
+        if len(context) < 3 or len(context) > 100 or any(character in context for character in "\r\n\x00"):
+            raise ValidationError(f"{context}: unsafe browser extension name pattern")
+        reject_spreadsheet_formula(context, context)
+        if not ID_RE.fullmatch(row["provider_id"]):
+            raise ValidationError(f"{context}: invalid provider_id")
+        if row["confidence"] not in {"low", "medium", "high"}:
+            raise ValidationError(f"{context}: unsupported confidence")
+        validate_source_url(row["source_url"], context)
+        validate_date(row["last_validated"], context)
+
+
 def validate_specs() -> list[dict[str, object]]:
     specs: list[dict[str, object]] = []
     ids: set[str] = set()
@@ -233,6 +260,7 @@ def build_tokens(
     domains: list[dict[str, str]],
     artifacts: list[dict[str, str]],
     browser_extensions: list[dict[str, str]],
+    browser_extension_names: list[dict[str, str]],
 ) -> dict[str, str]:
     domain_values = [row["indicator"] for row in domains]
     catalog_rows = []
@@ -284,6 +312,14 @@ def build_tokens(
         }
         for row in sorted(browser_extensions, key=lambda item: item["extension_id"])
     ]
+    browser_name_catalog = [
+        {
+            "pattern": row["pattern"],
+            "provider_id": row["provider_id"],
+            "confidence": row["confidence"],
+        }
+        for row in sorted(browser_extension_names, key=lambda item: (-len(item["pattern"]), item["pattern"].casefold()))
+    ]
     domain_collector_catalog = [
         {
             "artifact_id": row["indicator_id"],
@@ -314,6 +350,7 @@ def build_tokens(
         ),
         "{{ENDPOINT_CATALOG_JSON}}": json.dumps(collector_catalog, indent=2, sort_keys=True),
         "{{BROWSER_EXTENSION_CATALOG_JSON}}": json.dumps(browser_catalog, indent=2, sort_keys=True),
+        "{{BROWSER_EXTENSION_NAME_CATALOG_JSON}}": json.dumps(browser_name_catalog, indent=2, sort_keys=True),
         "{{DOMAIN_CATALOG_JSON}}": json.dumps(domain_collector_catalog, indent=2, sort_keys=True),
     }
 
@@ -407,11 +444,15 @@ def main() -> int:
     domains = read_csv(CATALOG_DIR / "providers.csv", DOMAIN_REQUIRED)
     artifacts = read_csv(CATALOG_DIR / "endpoint_artifacts.csv", ARTIFACT_REQUIRED)
     browser_extensions = read_csv(CATALOG_DIR / "browser_extensions.csv", BROWSER_EXTENSION_REQUIRED)
+    browser_extension_names = read_csv(
+        CATALOG_DIR / "browser_extension_name_patterns.csv", BROWSER_EXTENSION_NAME_REQUIRED
+    )
     validate_domains(domains)
     validate_artifacts(artifacts)
     validate_browser_extensions(browser_extensions)
+    validate_browser_extension_names(browser_extension_names)
     specs = validate_specs()
-    tokens = build_tokens(domains, artifacts, browser_extensions)
+    tokens = build_tokens(domains, artifacts, browser_extensions, browser_extension_names)
     paths = render_templates(tokens)
     paths.append(build_watchlist(domains))
     safe_write(Path("catalog") / "ai_domains.txt", "\n".join(sorted(row["indicator"] for row in domains)) + "\n")
@@ -419,7 +460,8 @@ def main() -> int:
     build_manifest(paths, specs)
     print(
         f"Validated {len(domains)} network indicators, {len(artifacts)} endpoint artifacts, "
-        f"{len(browser_extensions)} browser extensions, and {len(specs)} detections."
+        f"{len(browser_extensions)} browser extensions, {len(browser_extension_names)} extension name patterns, "
+        f"and {len(specs)} detections."
     )
     print(f"Built {len(paths)} artifacts under {DIST_DIR}.")
     return 0
