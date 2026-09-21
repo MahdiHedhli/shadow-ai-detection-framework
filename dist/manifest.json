@@ -7,7 +7,7 @@
     },
     {
       "path": "catalog/browser_extension_history.csv",
-      "sha256": "c32d0dca5598bcea7cdd72faf0b312ecfeca3dca6b4c3d80765bac34d8ca623a"
+      "sha256": "001155ab8e8376963e29cd5d46da41c7c0ef49c017c60c6cc5b332e03ca41131"
     },
     {
       "path": "microsoft-defender/01-ai-domain-access.kql",
@@ -66,5 +66,5 @@
       "sha256": "a0f55634bb45f224fafff0cb42223ec963fd2a3e17af3c4a39e22a4704960c22"
     }
   ],
-  "generated_on": "2026-09-14"
+  "generated_on": "2026-09-21"
 }
