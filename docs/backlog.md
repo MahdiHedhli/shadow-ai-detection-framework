@@ -6,7 +6,7 @@ This backlog records work that should not be promoted to production until it has
 
 ### P0: establish a deployable Mac collector
 
-- Inventory the macOS versions, Apple silicon/Intel mix, RMM execution account, script interpreter availability, MDM enrollment, and browser mix across pilot tenants.
+- Inventory macOS versions, Apple silicon/Intel mix, RMM execution account, script interpreter availability, MDM enrollment, and browser mix across pilot tenants.
 - Do not assume Python 3 exists. Choose and test either an RMM-provided runtime, a shell-only bootstrap-free collector, or a signed universal binary. The production job must not download or execute code from the internet.
 - Preserve the shared observation schema, privacy guarantees, bounded reads, and exit-code behavior used by the Windows collector.
 - Measure runtime, output size, permission failures, and partial-collection rates separately for each client.
