@@ -46,8 +46,10 @@ This backlog records work that should not be promoted to production until it has
 
 ## Ongoing MSP operations
 
-- Compare three tenant-isolated ingestion options after endpoint accuracy is validated: RMM-native dashboard/reporting, enrichment of the planned Microsoft 365 report, or a separate Shadow AI reporting service.
-- Define collection cadence, offline-device retry behavior, observation retention, per-client approval lists, and delta reporting.
+- Use the RMM-native custom task and task history as the initial Windows pilot delivery path; the collector has completed successfully on three consented Windows test endpoints with website-domain and browser-extension findings.
+- Save a reusable, versioned RMM task from a reviewed distribution artifact. Keep endpoint execution offline/self-contained; do not fetch a mutable script at runtime.
+- Confirm pilot-only recurring cadence, offline-device retry, output limits, tenant-scoped access, observation retention, per-client approval lists, and delta reporting before enabling schedules. Do not broaden the assignment to all managed endpoints by default.
+- Evaluate RMM-native reporting against Microsoft 365 report enrichment or a separate Shadow AI reporting service once RMM export, tenant isolation, and historical comparison capabilities are understood.
 - Preserve raw observations per tenant and generate cross-client MSP summaries only from non-identifying aggregates.
 - Add health reporting for collector version, partial coverage, stale endpoints, runtime, and output truncation before scheduling broadly.
 - Keep discovery separate from remediation. Blocking, uninstalling, or alert escalation requires corroborating evidence and an approved client policy.

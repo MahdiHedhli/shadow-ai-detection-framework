@@ -56,6 +56,18 @@ This convention intentionally avoids using a nonzero exit code to signal that AI
 4. Set an output-size limit appropriate to the RMM. The schema caps findings at 5,000; production ingestion should additionally enforce a byte limit.
 5. Store observations in a tenant-isolated location, enrich them with client-specific approval state, and expire endpoint metadata according to the client retention policy.
 
+## RMM task configuration
+
+For RMMs that execute PowerShell scripts and retain task output, package the generated Windows collector as a versioned, read-only custom task (for example, `Shadow AI Inventory - Windows`). Embed the reviewed `dist/rmm-windows/ShadowAIInventory.ps1` contents in the task; do not make endpoints download or execute a mutable script from a public URL. Set the expected run time from pilot measurements with a conservative ceiling, retain standard output for exit codes 0 and 2, alert on exit code 1, and flag exit code 2 for collection-health review. Run the self-test before the first collection, then assign only to a consented pilot device group.
+
+The Windows collector and browser-history/extension coverage were validated in the RMM task-output workflow on three consented pilot endpoints. The verified run completed with `partial=false` on all three and emitted both browser-extension findings and matched website-domain presence findings. Pilot telemetry and target identities intentionally do not belong in this public repository. Review lower-confidence name- or manifest-domain-based extension matches before treating them as confirmed products; exact catalog-ID matches provide stronger evidence.
+
+Do not schedule a broad fleet rollout based only on task success. First review output size, run time, coverage summaries, low-confidence matches, and tenant authorization. Weekly collection is a reasonable initial pilot cadence when approved. Historical inventory must be append-only and tenant-isolated: retain each observation with its collection timestamp, collector version, stable device identity, and a pseudonymous subject identifier where possible. Avoid overwriting the prior run with the latest result. Apply the customer's retention period and restrict report access because observations include endpoint and local-user identifiers.
+
+The extension-catalog workflow and endpoint collector release are separate controls. The GitHub workflow reviews store listings weekly and opens a pull request; it does not change the RMM task. Promote catalog changes only after human verification, rebuild and validate the distribution, then update the versioned RMM task deliberately. Do not let an automated listing check silently change detection behavior on client endpoints.
+
+RMM output is suitable as a per-tenant operational report when the platform can preserve task history and support tenant-scoped permissions. If the RMM cannot export observations safely or provide useful cross-run comparisons, send validated JSON through an authenticated, tenant-aware ingestion service rather than combining client data in a shared spreadsheet or mailbox. Keep Microsoft 365 reporting as a downstream view unless its ingestion, identity mapping, retention, and tenant isolation are explicitly established.
+
 For Windows pilots, include at least one confirmed per-user MSIX application and one traditional uninstall-registry application. Compare the collector result with RMM application inventory; RMM products commonly omit per-user packaged applications.
 
 Do not enable automated removal or blocking directly from these inventory findings. Require corroborating evidence and a client-approved response policy first.
