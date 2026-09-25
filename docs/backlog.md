@@ -46,7 +46,10 @@ This backlog records work that should not be promoted to production until it has
 
 ## Ongoing MSP operations
 
-- Use the RMM-native custom task and task history as the initial Windows pilot delivery path; the collector has completed successfully on three consented Windows test endpoints with website-domain and browser-extension findings.
+- Implement and validate the self-contained client HTML report builder; keep archives and review decisions out of public GitHub.
+- Choose and approve a tenant-isolated storage location, retention period, monthly schedule (proposed three scans/month), report date, access rules, and distribution channel before enabling automation.
+- The initial small-segment RMM pilot completed successfully on three Windows endpoints; task history reported success. Keep this evidence at pilot scope and do not treat it as permission to scan an entire client fleet.
+- Export and validate the pilot task observations, render a client-private HTML report, and verify known-positive/negative controls before expanding scope. The RMM history currently remains the private source of the pilot output.
 - Save a reusable, versioned RMM task from a reviewed distribution artifact. Keep endpoint execution offline/self-contained; do not fetch a mutable script at runtime.
 - Confirm pilot-only recurring cadence, offline-device retry, output limits, tenant-scoped access, observation retention, per-client approval lists, and delta reporting before enabling schedules. Do not broaden the assignment to all managed endpoints by default.
 - Evaluate RMM-native reporting against Microsoft 365 report enrichment or a separate Shadow AI reporting service once RMM export, tenant isolation, and historical comparison capabilities are understood.
