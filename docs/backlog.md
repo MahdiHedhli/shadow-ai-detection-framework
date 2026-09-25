@@ -47,6 +47,10 @@ This backlog records work that should not be promoted to production until it has
 ## Ongoing MSP operations
 
 - Use the RMM task history as a pilot source only when it preserves full output, enforces tenant-scoped access, and supports validated export.
+- Implement and validate the self-contained client HTML report builder; keep archives and review decisions out of public GitHub.
+- Choose and approve a tenant-isolated storage location, retention period, monthly schedule (proposed three scans/month), report date, access rules, and distribution channel before enabling automation.
+- Keep each RMM pilot scoped to its approved endpoint group; successful task execution is not permission to scan an entire client fleet.
+- Export and validate task observations, render a client-private HTML report, and verify known-positive/negative controls before expanding scope. Keep source outputs in tenant-restricted storage.
 - Save a reusable, versioned RMM task from a reviewed distribution artifact. Keep endpoint execution offline/self-contained; do not fetch a mutable script at runtime.
 - Confirm pilot-only recurring cadence, offline-device retry, output limits, tenant-scoped access, observation retention, per-client approval lists, and delta reporting before enabling schedules. Do not broaden the assignment to all managed endpoints by default.
 - Evaluate RMM-native reporting against Microsoft 365 report enrichment or a separate Shadow AI reporting service once RMM export, tenant isolation, and historical comparison capabilities are understood.

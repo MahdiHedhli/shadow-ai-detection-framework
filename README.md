@@ -19,6 +19,7 @@ The first milestone provides:
 - Microsoft Sentinel ASIM queries backed by a generated watchlist.
 - Read-only Windows and macOS/Linux RMM collectors with a shared observation schema.
 - A standard-library-only builder and validator.
+- A self-contained, interactive HTML report builder for client-scoped historical observations, provider/evidence filters, and review decisions.
 - Tests that reject unsafe catalog values and known-invalid MDE assumptions such as `SentBytes`, `ReceivedBytes`, and invented file-read actions.
 
 All initial rules are discovery or hunting content. They are not automatic blocking rules.
@@ -29,6 +30,21 @@ All initial rules are discovery or hunting content. They are not automatic block
 python3 tools/build.py
 python3 -m unittest discover -s tests -v
 ```
+
+## Build a private client report
+
+Export validated observation JSON from the RMM into that client's private archive, then build one report per client. Never put client observations, HTML reports, or review-decision files in this public repository.
+
+```bash
+python3 tools/build_report.py \
+  --observations /secure/client-a/shadow-ai/observations \
+  --period 2026-09 \
+  --client-label "Client A" \
+  --reviews /secure/client-a/shadow-ai/review-decisions.json \
+  --output /secure/client-a/shadow-ai/reports/2026-09.html
+```
+
+The generated HTML is self-contained and works offline. It opens with an executive summary, scan coverage, key counts, and provider/evidence/time visuals, with interactive provider, evidence type, confidence, and text filters. Acknowledged or justified findings can be hidden without deleting observations; review decisions can be exported from the report and loaded into the next monthly build. Local account names are omitted unless `--include-local-users` is deliberately supplied. See [Monthly collection and reporting](docs/monthly-reporting.md) for the proposed operating procedure and unresolved storage/scheduling choices.
 
 Generated, ready-to-run artifacts are written under `dist/`.
 
