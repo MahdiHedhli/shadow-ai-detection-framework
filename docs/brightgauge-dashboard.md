@@ -51,6 +51,14 @@ one client is selected; export the currently filtered rows for that client and
 no other tenant. Do not expose reviewer identities or review reasons in the
 cross-client dataset. Treat the CSV itself as confidential client telemetry.
 
+For native BrightGauge customer reports, validate custom-dataset client mapping
+before creating or scheduling a client report. ConnectWise documents client
+mapping as the mechanism used to filter custom dataset rows for client reports;
+the internal dashboard's `client_id` selector is not a substitute for that
+mapping. Until the mapping field and each client association are verified,
+deliver customer-specific exports only from the single-client-scoped exporter.
+See the [ConnectWise Client Reporting guide](https://docs.connectwise.com/BrightGauge/070/030).
+
 ## Metric definitions and limits
 
 | Measure | Definition | Interpretation limit |
