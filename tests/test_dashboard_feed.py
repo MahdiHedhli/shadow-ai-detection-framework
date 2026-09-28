@@ -128,6 +128,7 @@ class DashboardFeedTests(unittest.TestCase):
             )
             rendered = feed.make_csv(findings, feed.FINDING_FIELDS)
         self.assertEqual(findings[0]["review_status"], "justified")
+        self.assertEqual(findings[0]["confidence_rank"], 3)
         self.assertEqual(findings[0]["reviewed_at"], "2026-09-20T10:00:00Z")
         self.assertNotIn("PRIVATE REVIEWER", rendered)
         self.assertNotIn("PRIVATE CLIENT REASON", rendered)

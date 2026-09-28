@@ -30,7 +30,7 @@ FINDING_FIELDS = [
     "schema_version", "client_id", "client_label", "finding_key", "finding_id",
     "observation_id", "collected_at", "observed_at", "os_family", "provider_id",
     "provider_name", "product", "category", "capability", "confidence",
-    "evidence_level", "review_status", "reviewed_at", "browser", "matched_domain",
+    "confidence_rank", "evidence_level", "review_status", "reviewed_at", "browser", "matched_domain",
     "extension_id", "display_name", "version", "classification_basis",
 ]
 SCAN_FIELDS = [
@@ -203,6 +203,7 @@ def load_client_data(
                 "category": finding["category"],
                 "capability": finding["capability"],
                 "confidence": finding["confidence"],
+                "confidence_rank": {"low": 1, "medium": 2, "high": 3}[finding["confidence"]],
                 "evidence_level": finding["evidence_level"],
                 "review_status": review.get("status", "open"),
                 "reviewed_at": review.get("reviewed_at", ""),

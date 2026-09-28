@@ -26,7 +26,7 @@ Do not use this public GitHub repository as telemetry storage. Compare these opt
 - **Tenant-isolated encrypted storage:** store validated observations in a client-restricted location with encryption, versioning/append-only controls, least-privilege access, and an agreed retention/deletion schedule. This is the preferred direction if RMM history is not a durable archive, but the actual service/location remains TBD.
 - **Database/ingestion service:** consider only if an ongoing multi-client service is needed. Require authenticated tenant identity, authorization checks, encrypted transport/storage, access logging, retention enforcement, and a tested tenant-isolation boundary before ingestion.
 
-Keep one archive directory and one report output per client. The report builder is intentionally invoked separately for each client; do not combine clients' raw rows to make an MSP-wide report. Cross-client views, if later required, must use non-identifying aggregates only.
+Keep one archive directory and one customer report output per client. The customer report builder is intentionally invoked separately for each client. A combined finding-level view is allowed only in the access-controlled internal technician dashboard, with an approved access boundary. Keep endpoint hostnames, local usernames, reviewer names, and review reasons out of that cross-client feed by default; apply the selected-client scope consistently to every view and export. Never place combined feeds or reports in this public repository or an unapproved shared folder.
 
 ## Private technician dashboard feed
 
