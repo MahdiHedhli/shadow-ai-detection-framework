@@ -83,6 +83,8 @@ not include other clients' rows.
 
 The RMM automation-history dataset is a separate run-count source and must not be combined with finding metrics. ConnectWise documents CSV-backed datasets using Dropbox or OneDrive, which may provide a path for dedicated findings and scan feeds. Before connecting a source, validate its licensing, refresh behavior, client mapping, and whether the feed can be restricted to an approved folder. Never replace an existing datasource or upgrade a plan implicitly.
 
+The automation-history dataset may include unrelated task records. Do not export it wholesale. Use a task-scoped extraction or dedicated CSV feeds, then verify that client filters, sorting, exports, and review-state hiding consistently apply to the selected client before sharing.
+
 ## Generate and review the monthly report
 
 For the report month, provide the client-specific observations, a client display label, the month (`YYYY-MM`), and the client's private review-decision file:
