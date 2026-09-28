@@ -105,7 +105,28 @@ When a task-scoped CSV export is available, `tools/import_rmm_task_export.py`
 can validate and append its JSON observations to the private per-client
 archives. Add each source `company_unique_id` to the matching client's private
 manifest as `rmm_company_unique_id`; do not put real company IDs or labels in a
-public example or in this repository. Then run:
+public example or in this repository. For a single repeatable refresh of the
+archive, both BrightGauge CSV feeds, and the sortable technician HTML view, run:
+
+```bash
+python3 tools/refresh_dashboard.py \
+  --input /secure/staging/shadow-ai-task-export.csv \
+  --manifest /secure/shadow-ai/dashboard-clients.json \
+  --task-name "Shadow AI Inventory - Windows" \
+  --output-dir /secure/shadow-ai/brightgauge-feed \
+  --dashboard /secure/shadow-ai/internal-dashboard.html
+```
+
+Use `--period YYYY-MM` only when a month-specific view is intended. The
+default rebuilds from the complete accumulated archive. The command refuses
+to replace existing feed or dashboard files unless `--overwrite` is supplied;
+re-importing identical observation IDs is safe and idempotent. It does not
+upload to BrightGauge or configure a refresh schedule: upload the two feeds
+through the approved dataset workflow and verify field types, mappings,
+retention, and filters there.
+
+To archive observations without rebuilding the views, the lower-level import
+command remains available:
 
 ```bash
 python3 tools/import_rmm_task_export.py \
@@ -128,10 +149,10 @@ staging location for the operator's approved retention/deletion process.
 
 The importer does not fetch from BrightGauge or choose storage/retention; a
 task-scoped export workflow and private manifest must be established separately.
-Do not extract or publish the raw `execution_output` field wholesale. After
-importing, use `tools/build_dashboard_feed.py` for BrightGauge CSVs or
-`tools/build_internal_dashboard.py` for the restricted offline technician
-view. Customer-facing HTML remains a separate one-client build.
+Do not extract or publish the raw `execution_output` field wholesale. The
+lower-level `tools/build_dashboard_feed.py` and
+`tools/build_internal_dashboard.py` commands remain available for independent
+rebuilds. Customer-facing HTML remains a separate one-client build.
 
 ## Private internal HTML dashboard
 
