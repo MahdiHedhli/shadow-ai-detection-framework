@@ -91,13 +91,14 @@ datasource or expand sharing as an incidental setup step.
 
 For a bounded pilot, use BrightGauge's direct CSV upload to create one dataset
 from each generated feed. The supported workflow is under **Data > Datasets**;
-the ConnectWise guide covers CSV upload and custom-dataset creation. Review
-field types after upload: timestamps should be dates, `partial` should be a
-boolean, counts and evidence levels numeric, and IDs/statuses text. Keep the
-findings and scans datasets separate and use `client_id` for consistent client
-filtering. Before replacing a CSV, verify the upload's history/replace behavior
-and re-upload the complete accumulated feed, not only the newest scan. Do not
-upload observations or raw RMM `execution_output` directly.
+the [ConnectWise Datasets guide](https://docs.connectwise.com/BrightGauge/090/005)
+covers CSV upload and custom-dataset creation. Review field types after upload:
+timestamps should be dates, `partial` should be a boolean, counts and evidence
+levels numeric, and IDs/statuses text. Keep the findings and scans datasets
+separate and use `client_id` for consistent client filtering. Before replacing
+a CSV, verify the upload's history/replace behavior and re-upload the complete
+accumulated feed, not only the newest scan. Do not upload observations or raw
+RMM `execution_output` directly.
 
 The direct upload is suitable for initial dashboard wiring and a small pilot;
 it is not itself a recurring refresh mechanism. For scheduled refresh, choose a
