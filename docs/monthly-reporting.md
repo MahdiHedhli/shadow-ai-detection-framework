@@ -141,14 +141,17 @@ python3 tools/build_internal_dashboard.py \
   --period 2026-09
 ```
 
-Omit `--period` to include all available history. The dashboard supports client,
-month, provider/product, finding type, confidence, review-state, and text
-filters; sortable finding columns; client/provider breakdowns; and scan
-coverage. Its customer CSV export stays disabled until one client is selected
-and exports only that client's currently filtered rows. Endpoint and local-user
-identities, reviewer names, and review reasons are omitted from this multi-client
-view and customer CSV. For a fuller customer-facing HTML report with endpoint
-details, continue using `tools/build_report.py` once per client.
+Omit `--period` to include all available history. The dashboard opens to an
+all-client view for the archives in the private manifest. A technician can
+scope the dashboard to one client; the selected scope applies to its summary
+metrics, charts, and rows. It supports month, provider/product, finding type,
+confidence, review-state, and text filters; sortable finding columns;
+client/provider breakdowns; and scan coverage. Its customer CSV export stays
+disabled until one client is selected and exports only that client's currently
+filtered rows. Endpoint and local-user identities, reviewer names, and review
+reasons are omitted from this multi-client view and customer CSV. For a fuller
+customer-facing HTML report with endpoint details, continue using
+`tools/build_report.py` once per client.
 
 The output is a self-contained file embedding the included client telemetry;
 it makes no network requests and has no built-in SSO/MFA protection. The
