@@ -28,6 +28,61 @@ Do not use this public GitHub repository as telemetry storage. Compare these opt
 
 Keep one archive directory and one report output per client. The report builder is intentionally invoked separately for each client; do not combine clients' raw rows to make an MSP-wide report. Cross-client views, if later required, must use non-identifying aggregates only.
 
+## Private technician dashboard feed
+
+For an MSP-wide technician view, `tools/build_dashboard_feed.py` creates two
+BrightGauge-friendly CSVs from separate, validated client archives: one row per
+finding observation and a separate scan-coverage feed. A private manifest maps
+each stable `client_id` and display label to its own archive and optional review
+file. The script preserves that tenant boundary when reading reviews and never
+places endpoint hostnames, local usernames, reviewer names, or review reasons in
+the dashboard feeds. It includes a stable pseudonymous finding key so repeated
+observations and review status can be correlated; treat that key, client labels,
+extension IDs, domains, and both CSVs as confidential telemetry.
+
+Keep the manifest, source archives, and generated CSVs outside this public
+repository. The output directory must be private (POSIX mode `0700` or stricter)
+and the files are created as `0600`. The feed builder refuses paths inside the
+public repository, escapes spreadsheet-formula prefixes, and does not replace
+existing files unless `--overwrite` is explicitly supplied.
+
+Example private manifest (store it only in the secured reporting environment):
+
+```json
+{
+  "schema_version": "1.0",
+  "clients": [
+    {
+      "client_id": "client-a",
+      "client_label": "Client A",
+      "observations": "./client-a/observations",
+      "reviews": "./client-a/review-decisions.json"
+    }
+  ]
+}
+```
+
+Build the current-month feed to a restricted local folder:
+
+```bash
+python3 tools/build_dashboard_feed.py \
+  --manifest /secure/shadow-ai/dashboard-clients.json \
+  --output-dir /secure/shadow-ai/brightgauge-feed \
+  --period 2026-09
+```
+
+The findings feed's grain is one finding event per scan; it is not a count of
+unique devices or currently active findings. Use `finding_key` for a distinct
+finding identity across versions/scans, while keeping `finding_id` and
+`observation_id` as event identifiers. The scans feed has one row per
+observation and emits `no_observations` rather than implying a clean scan when a
+client has no data for the selected period. The two feeds can power client,
+provider, product, category, confidence, evidence, and review-state filters.
+Client exports must apply the same selected-client scope to every view and must
+not include other clients' rows.
+
+The RMM automation-history dataset is a separate run-count source and must not be combined with finding metrics. ConnectWise documents CSV-backed datasets using Dropbox or OneDrive, which may provide a path for dedicated findings and scan feeds. Before connecting a source, validate its licensing, refresh behavior, client mapping, and whether the feed can be restricted to an approved folder. Never replace an existing datasource or upgrade a plan implicitly.
+
 ## Generate and review the monthly report
 
 For the report month, provide the client-specific observations, a client display label, the month (`YYYY-MM`), and the client's private review-decision file:

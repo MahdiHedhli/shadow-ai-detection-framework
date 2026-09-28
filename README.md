@@ -20,6 +20,7 @@ The first milestone provides:
 - Read-only Windows and macOS/Linux RMM collectors with a shared observation schema.
 - A standard-library-only builder and validator.
 - A self-contained, interactive HTML report builder for client-scoped historical observations, provider/evidence filters, and review decisions.
+- A private, multi-client CSV feed builder for technician dashboards, with separate findings and scan-coverage datasets.
 - Tests that reject unsafe catalog values and known-invalid MDE assumptions such as `SentBytes`, `ReceivedBytes`, and invented file-read actions.
 
 All initial rules are discovery or hunting content. They are not automatic blocking rules.
@@ -45,6 +46,8 @@ python3 tools/build_report.py \
 ```
 
 The generated HTML is self-contained and works offline. It opens with an executive summary, scan coverage, key counts, and provider/evidence/time visuals, with interactive provider, evidence type, confidence, and text filters. Acknowledged or justified findings can be hidden without deleting observations; review decisions can be exported from the report and loaded into the next monthly build. Local account names are omitted unless `--include-local-users` is deliberately supplied. See [Monthly collection and reporting](docs/monthly-reporting.md) for the proposed operating procedure and unresolved storage/scheduling choices.
+
+For an internal technician dashboard spanning clients, use a private client-to-archive manifest with `tools/build_dashboard_feed.py`. It emits one private CSV for finding observations and another for scan coverage, so a BI/dashboard source can filter by client without exposing endpoint or local-user identities. The client labels, finding keys, extension IDs, and domains remain confidential telemetry; do not store the manifest or feeds in this repository. See [Monthly collection and reporting](docs/monthly-reporting.md#private-technician-dashboard-feed) for the manifest format, permissions, row grain, and current BrightGauge datasource dependency.
 
 Generated, ready-to-run artifacts are written under `dist/`.
 
