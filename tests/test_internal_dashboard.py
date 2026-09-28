@@ -69,6 +69,19 @@ class InternalDashboardTests(unittest.TestCase):
         self.assertNotIn('"reviewer"', html)
         self.assertNotIn('"reason"', html)
 
+    def test_no_observation_status_is_scoped_to_requested_period(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest = self.make_private_inputs(root)
+            (root / "client-b" / "observations" / "scan.json").unlink()
+            payload = dashboard.build_payload(manifest, "2026-09")
+
+        self.assertIn("2026-09", payload["months"])
+        missing = next(row for row in payload["scans"] if row["client_id"] == "client-b")
+        self.assertEqual(missing["scan_status"], "no_observations")
+        self.assertEqual(missing["period"], "2026-09")
+        self.assertIn('String(r.collected_at||r.period||"").startsWith(period)', dashboard.DASHBOARD_HTML)
+
     def test_payload_is_script_safe_and_offline_only(self) -> None:
         payload = {"clients": [], "findings": [{"client_label": "</script><script>alert(1)</script>"}], "scans": []}
         html = dashboard.make_html(payload)

@@ -38,7 +38,11 @@ def build_payload(manifest_path: Path, period: str | None) -> dict[str, Any]:
         row["client_label"].casefold(), row["observed_at"], row["provider_name"].casefold()
     ))
     scans.sort(key=lambda row: (row["client_label"].casefold(), row["collected_at"]))
-    months = {str(row["collected_at"])[:7] for row in scans if row.get("collected_at")}
+    months = {
+        str(row.get("collected_at") or row.get("period") or "")[:7]
+        for row in scans
+        if row.get("collected_at") or row.get("period")
+    }
     return {
         "schema_version": "1.0",
         "period": period or "all available history",
@@ -143,7 +147,7 @@ const products=new Map();for(const r of data.findings)products.set(`${r.provider
 addOptions("category",data.findings.map(r=>r.category),labelCategory);
 const safeText=row=>[row.client_label,row.provider_name,row.product,row.category,row.capability,row.browser,row.matched_domain,row.extension_id,row.display_name,row.version,row.classification_basis,row.evidence_level].join(" ").toLocaleLowerCase();
 function filteredFindings(){const client=$("client").value,period=$("period").value,provider=$("provider").value,category=$("category").value,confidence=$("confidence").value,review=$("review").value,query=$("search").value.trim().toLocaleLowerCase(),hide=$("hideReviewed").checked;return data.findings.filter(r=>{if(client&&r.client_id!==client)return false;if(period&&!String(r.collected_at).startsWith(period))return false;if(provider&&`${r.provider_id}|${r.product}`!==provider)return false;if(category&&r.category!==category)return false;if(confidence&&r.confidence!==confidence)return false;if(review&&r.review_status!==review)return false;if(hide&&r.review_status!=="open")return false;if(query&&!safeText(r).includes(query))return false;return true})}
-function filteredScans(){const client=$("client").value,period=$("period").value;return data.scans.filter(r=>(!client||r.client_id===client)&&(!period||!r.collected_at||String(r.collected_at).startsWith(period)))}
+function filteredScans(){const client=$("client").value,period=$("period").value;return data.scans.filter(r=>{if(client&&r.client_id!==client)return false;if(!period)return true;return String(r.collected_at||r.period||"").startsWith(period)})}
 function barList(id,counts){const root=$(id);root.replaceChildren();const items=[...counts.entries()].sort((a,b)=>b[1]-a[1]||String(a[0]).localeCompare(String(b[0]))).slice(0,8),max=Math.max(1,...items.map(x=>x[1]));if(!items.length){const e=document.createElement("div");e.className="empty";e.textContent="No data in this view.";root.append(e);return}for(const [name,count] of items){const line=document.createElement("div");line.className="bar";const text=document.createElement("span");text.className="name";text.textContent=name;const track=document.createElement("div");track.className="track";const fill=document.createElement("div");fill.className="fill";fill.style.width=`${Math.max(2,count/max*100)}%`;track.append(fill);const value=document.createElement("span");value.className="num";value.textContent=count.toLocaleString();line.append(text,track,value);root.append(line)}}
 function sortValue(row,key){if(key==="provider_name")return `${row.provider_name} ${row.product}`.toLocaleLowerCase();if(key==="category"||key==="review_status"||key==="client_label"||key==="evidence_level")return String(row[key]||"").toLocaleLowerCase();if(key==="confidence_rank")return Number(row[key]||0);return String(row[key]||"")}
 function sortedRows(source){const direction=$("sortDirection").value;return [...source].sort((a,b)=>{const x=sortValue(a,state.sort),y=sortValue(b,state.sort);const cmp=typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y),undefined,{numeric:true});return (direction==="desc"?-1:1)*cmp||a.client_id.localeCompare(b.client_id)||a.finding_id.localeCompare(b.finding_id)})}
