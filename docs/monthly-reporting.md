@@ -147,6 +147,22 @@ If storage fails mid-run, rerunning the same export is safe: previously stored
 identical observations are skipped. The CSV itself remains in its private
 staging location for the operator's approved retention/deletion process.
 
+### Handling raw RMM exports
+
+Treat the export and every `execution_output` value as confidential endpoint
+telemetry. Apply the exact scanner-task filter and confirm the intended company
+scope in RMM before exporting. Download directly to a restricted local staging
+directory; do not open or preview the CSV in a browser/task-output pane, paste
+raw output into chat, tickets, email, or shell history, or copy it into this
+repository. Some RMM views render the complete scanner JSON when a task run is
+selected. Use only the downloaded, task-scoped file with
+`tools/refresh_dashboard.py`; it validates every row and archives observations
+under the mapped client. Keep staging access limited and remove the source CSV
+according to the approved retention policy after verifying import and feed
+generation. Prefer aggregate counts for routine status, and protect them at the
+same level as dashboard feeds when cross-client activity is sensitive. Never
+print the underlying JSON as a troubleshooting shortcut.
+
 The importer does not fetch from BrightGauge or choose storage/retention; a
 task-scoped export workflow and private manifest must be established separately.
 Do not extract or publish the raw `execution_output` field wholesale. The
