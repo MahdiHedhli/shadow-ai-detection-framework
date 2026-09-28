@@ -76,6 +76,10 @@ class RefreshDashboardTests(unittest.TestCase):
             self.assertIn("Claude", findings_text)
             self.assertIn("complete", scans_text)
             self.assertIn("Export selected client CSV", dashboard_text)
+            self.assertIn("Client comparison", dashboard_text)
+            self.assertIn('data-client-sort="finding_observations"', dashboard_text)
+            self.assertIn('data-client-sort="client_label"', dashboard_text)
+            self.assertIn("renderClientComparison(all,scans)", dashboard_text)
             for content in (findings_text, scans_text, dashboard_text):
                 self.assertNotIn("PRIVATE-TEST-HOST", content)
             if os.name == "posix":
