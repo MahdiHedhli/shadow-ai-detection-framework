@@ -99,12 +99,11 @@ automation.
 
 Current implementation boundary: the repository can import a task-scoped RMM
 export, validate it, build the two normalized CSV feeds, and create a private
-interactive HTML dashboard. The inspected BrightGauge workspace exposes
-OneDrive and Dropbox as datasource choices, but no finding-level CSV dataset is
-connected yet. Select an approved, restricted folder and authorize its
-integration before connecting either source; do not point it at a broad shared
-library. If direct CSV upload is available in the chosen account, verify its
-replace/refresh behavior before relying on it. The existing RMM automation
+interactive HTML dashboard. BrightGauge supports CSV datasets through direct
+upload and cloud-file integrations, depending on the account and workflow. Use
+an approved, restricted folder for any connected storage source; do not point
+it at a broad shared library. Verify field types, replace/refresh behavior, and
+history retention before relying on a dataset. The existing RMM automation
 dataset contains task-run metadata and raw execution output; run counts alone
 cannot power the finding-level measures above. Do not claim the live board is
 finding-complete until the two feeds are connected and the rendered filters,
