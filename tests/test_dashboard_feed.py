@@ -24,6 +24,34 @@ class DashboardFeedTests(unittest.TestCase):
         with self.assertRaises(feed.FeedError):
             feed.outside_public_repo(ROOT / "private-client-data" / "manifest.json", "client manifest")
 
+    def test_manifest_rejects_overlapping_client_archives(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            manifest = base / "dashboard-clients.json"
+            manifest.write_text(json.dumps({
+                "schema_version": "1.0",
+                "clients": [
+                    {"client_id": "client-a", "client_label": "Client A", "observations": "client-a"},
+                    {"client_id": "client-b", "client_label": "Client B", "observations": "client-a/client-b"},
+                ],
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(feed.FeedError, "must not overlap"):
+                feed.load_manifest(manifest)
+
+    def test_manifest_rejects_review_file_inside_any_observation_archive(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            manifest = base / "dashboard-clients.json"
+            manifest.write_text(json.dumps({
+                "schema_version": "1.0",
+                "clients": [
+                    {"client_id": "client-a", "client_label": "Client A", "observations": "client-a"},
+                    {"client_id": "client-b", "client_label": "Client B", "observations": "client-b", "reviews": "client-a/reviews.json"},
+                ],
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(feed.FeedError, "outside every client observation archive"):
+                feed.load_manifest(manifest)
+
     def test_csv_formula_prefix_is_neutralized(self) -> None:
         self.assertEqual(feed.csv_value("=HYPERLINK(\"https://bad\")"), "'=HYPERLINK(\"https://bad\")")
         self.assertEqual(feed.csv_value(" Anthropic"), " Anthropic")

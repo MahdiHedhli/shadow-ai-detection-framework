@@ -49,6 +49,8 @@ The generated HTML is self-contained and works offline. It opens with an executi
 
 For an internal technician dashboard spanning clients, use a private client-to-archive manifest with `tools/build_dashboard_feed.py`. It emits one private CSV for finding observations and another for scan coverage, so a BI/dashboard source can filter by client without exposing endpoint or local-user identities. The client labels, finding keys, extension IDs, and domains remain confidential telemetry; do not store the manifest or feeds in this repository. See [Monthly collection and reporting](docs/monthly-reporting.md#private-technician-dashboard-feed) for the manifest format, permissions, row grain, and current BrightGauge datasource dependency.
 
+To build a standalone, offline technician dashboard from the same manifest, use `tools/build_internal_dashboard.py`. It supports client, month, provider/product, finding type, confidence, review-state, and text filters; sortable finding columns; scan coverage; and a customer CSV export that stays disabled until exactly one client is selected. The HTML embeds confidential multi-client telemetry, so its output directory must be private and outside this repository. This local file is not protected by BrightGauge SSO/MFA and must not be put in a shared location without an approved access boundary. See [Monthly collection and reporting](docs/monthly-reporting.md#private-internal-html-dashboard) for use and limits.
+
 Generated, ready-to-run artifacts are written under `dist/`.
 
 Collector self-tests do not inspect endpoint data:

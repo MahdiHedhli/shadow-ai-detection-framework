@@ -85,6 +85,39 @@ The RMM automation-history dataset is a separate run-count source and must not b
 
 The automation-history dataset may include unrelated task records. Do not export it wholesale. Use a task-scoped extraction or dedicated CSV feeds, then verify that client filters, sorting, exports, and review-state hiding consistently apply to the selected client before sharing.
 
+## Private internal HTML dashboard
+
+For a filterable technician view before a findings dataset is available in
+BrightGauge, build an offline dashboard directly from the same private manifest
+and validated archives:
+
+```bash
+python3 tools/build_internal_dashboard.py \
+  --manifest /secure/shadow-ai/dashboard-clients.json \
+  --output /secure/shadow-ai/internal-dashboard.html \
+  --period 2026-09
+```
+
+Omit `--period` to include all available history. The dashboard supports client,
+month, provider/product, finding type, confidence, review-state, and text
+filters; sortable finding columns; client/provider breakdowns; and scan
+coverage. Its customer CSV export stays disabled until one client is selected
+and exports only that client's currently filtered rows. Endpoint and local-user
+identities, reviewer names, and review reasons are omitted from this multi-client
+view and customer CSV. For a fuller customer-facing HTML report with endpoint
+details, continue using `tools/build_report.py` once per client.
+
+The output is a self-contained file embedding the included client telemetry;
+it makes no network requests and has no built-in SSO/MFA protection. The
+builder requires a parent directory with POSIX mode `0700` or stricter, creates
+the HTML with mode `0600`, and refuses outputs within this public repository or
+an existing file unless `--overwrite` is explicit. Keep it local or in an
+approved, access-controlled location; do not attach it to tickets, email it,
+or place it in a broadly shared folder. Rebuild after new scans rather than
+assuming the page refreshes itself. BrightGauge remains the intended SSO/MFA-
+protected shared technician surface once a dedicated findings feed and
+filterable dataset are connected.
+
 ## Generate and review the monthly report
 
 For the report month, provide the client-specific observations, a client display label, the month (`YYYY-MM`), and the client's private review-decision file:

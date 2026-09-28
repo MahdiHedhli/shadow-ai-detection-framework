@@ -94,8 +94,13 @@ def load_manifest(path: Path) -> list[dict[str, Any]]:
         if not isinstance(observations, str) or not observations.strip():
             raise FeedError(f"client entry {index} needs an observations directory or file")
         observation_path = outside_public_repo(path.parent / observations, "observation archive")
-        if observation_path in seen_archives:
-            raise FeedError("each client must map to a separate observation archive")
+        for existing_archive in seen_archives:
+            if (
+                observation_path == existing_archive
+                or observation_path.is_relative_to(existing_archive)
+                or existing_archive.is_relative_to(observation_path)
+            ):
+                raise FeedError("client observation archives must not overlap or contain one another")
         review_path: Path | None = None
         if reviews is not None:
             if not isinstance(reviews, str) or not reviews.strip():
@@ -114,6 +119,12 @@ def load_manifest(path: Path) -> list[dict[str, Any]]:
             "observations": observation_path,
             "reviews": review_path,
         })
+    for client in normalized:
+        review_path = client["reviews"]
+        if review_path is None:
+            continue
+        if any(review_path.is_relative_to(archive) for archive in seen_archives):
+            raise FeedError("review-decision files must be outside every client observation archive")
     return normalized
 
 
