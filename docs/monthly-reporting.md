@@ -18,15 +18,15 @@ After the pilot has passed review and the client approves recurring collection, 
 
 This cadence is a proposal, not an active schedule. Before enabling it, document the client's approval, exact device group, timezone, retries/offline handling, RMM output retention, maximum output size, review owner, and stop/rollback path. Review the first two cycles before treating it as steady state.
 
-## Storage decision — still open
+## Storage and access controls
 
 Do not use this public GitHub repository as telemetry storage. Compare these options for the pilot client and select one with the client's retention and access requirements:
 
 - **RMM task history:** operationally simple if it retains complete output for the required period, supports reliable export, and enforces tenant-scoped permissions. Confirm retention, export, size limits, and history behavior before relying on it as the archive.
-- **Tenant-isolated encrypted storage:** store validated observations in a client-restricted location with encryption, versioning/append-only controls, least-privilege access, and an agreed retention/deletion schedule. This is the preferred direction if RMM history is not a durable archive, but the actual service/location remains TBD.
+- **Tenant-isolated encrypted storage:** store validated observations in a client-restricted location with encryption, versioning/append-only controls, least-privilege access, and an agreed retention/deletion schedule. Prefer this direction if RMM history is not a durable archive.
 - **Database/ingestion service:** consider only if an ongoing multi-client service is needed. Require authenticated tenant identity, authorization checks, encrypted transport/storage, access logging, retention enforcement, and a tested tenant-isolation boundary before ingestion.
 
-Keep one archive directory and one customer report output per client. The customer report builder is intentionally invoked separately for each client. A combined finding-level view is allowed only in the access-controlled internal technician dashboard, with an approved access boundary. Keep endpoint hostnames, local usernames, reviewer names, and review reasons out of that cross-client feed by default; apply the selected-client scope consistently to every view and export. Never place combined feeds or reports in this public repository or an unapproved shared folder.
+Keep one archive directory and one customer report output per client. The customer report builder is intentionally invoked separately for each client. A combined finding-level view is appropriate only in an internal technician dashboard with an approved access boundary. Keep endpoint hostnames, local usernames, reviewer names, and review reasons out of that cross-client feed by default; apply the selected-client scope consistently to every view and export. Never place combined feeds or reports in this public repository or an unapproved shared folder.
 
 ## Private technician dashboard feed
 
@@ -82,7 +82,15 @@ provider, product, category, confidence, evidence, and review-state filters.
 Client exports must apply the same selected-client scope to every view and must
 not include other clients' rows.
 
-The RMM automation-history dataset is a separate run-count source and must not be combined with finding metrics. ConnectWise documents CSV-backed datasets using Dropbox or OneDrive, which may provide a path for dedicated findings and scan feeds. Before connecting a source, validate its licensing, refresh behavior, client mapping, and whether the feed can be restricted to an approved folder. Never replace an existing datasource or upgrade a plan implicitly.
+The existing RMM automation-history dataset is a separate run-count source and
+must not be combined with finding metrics. ConnectWise documents CSV-backed
+datasets using Dropbox or OneDrive, which may provide a path for dedicated
+findings and scan feeds without a bespoke API integration. Before connecting a
+source, validate its licensing, refresh behavior, client mapping, and whether
+the feed can be restricted to an approved folder. Never replace an existing
+datasource or upgrade a plan implicitly. Store only the normalized findings and
+scan feeds in that approved location, never in this public repository or a
+broadly shared folder.
 
 The automation-history dataset may include unrelated task records. Do not export it wholesale. Use a task-scoped extraction or dedicated CSV feeds, then verify that client filters, sorting, exports, and review-state hiding consistently apply to the selected client before sharing.
 
@@ -149,9 +157,9 @@ the HTML with mode `0600`, and refuses outputs within this public repository or
 an existing file unless `--overwrite` is explicit. Keep it local or in an
 approved, access-controlled location; do not attach it to tickets, email it,
 or place it in a broadly shared folder. Rebuild after new scans rather than
-assuming the page refreshes itself. BrightGauge remains the intended SSO/MFA-
-protected shared technician surface once a dedicated findings feed and
-filterable dataset are connected.
+assuming the page refreshes itself. Use the approved, access-controlled shared
+technician dashboard once a dedicated findings feed and filterable dataset are
+connected.
 
 ## Generate and review the monthly report
 
@@ -174,7 +182,7 @@ Use the standalone HTML as the filterable report. A printed/PDF copy is a static
 
 Before enabling automated report distribution, configure verified recipients, client-specific permissions, an approved channel, and a clear per-client versus internal audience. Never distribute a report containing another client's data.
 
-After the mechanics are validated, the intended next engineering step is to deploy the report and automation workflow in an appropriate private organization repository and configure a tenant-aware job there. The public repository should contain generic collector/report code, schemas, and tests only. Keep client configuration, observations, decisions, credentials, storage URLs, recipient lists, and generated reports in private tenant-controlled systems.
+After the mechanics are validated, deploy the report and automation workflow in an appropriate private organization repository and configure a tenant-aware job there. The public repository should contain generic collector/report code, schemas, and tests only. Keep client configuration, observations, decisions, credentials, storage URLs, recipient lists, and generated reports in private tenant-controlled systems.
 
 ## Pilot exit criteria
 
