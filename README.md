@@ -53,6 +53,8 @@ To build a standalone, offline technician dashboard from the same manifest, use 
 
 For a task-scoped RMM/BrightGauge CSV export, `tools/import_rmm_task_export.py` validates each `execution_output` JSON object and appends it to the archive mapped by `company_unique_id` in the private manifest. It rejects other task names, unmapped clients, invalid observations, and conflicting duplicates; it never writes the source CSV into the public repo. See [RMM task export ingestion](docs/monthly-reporting.md#rmm-task-export-ingestion).
 
+See [BrightGauge dashboard design and data contract](docs/brightgauge-dashboard.md) for the finding-level view, metric definitions, client scoping, and refresh requirements.
+
 Generated, ready-to-run artifacts are written under `dist/`.
 
 Collector self-tests do not inspect endpoint data:
