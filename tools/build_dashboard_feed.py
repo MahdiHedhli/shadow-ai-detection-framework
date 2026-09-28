@@ -26,6 +26,7 @@ import build_report
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_SCHEMA_VERSION = "1.0"
 CLIENT_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
+RMM_COMPANY_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 FINDING_FIELDS = [
     "schema_version", "client_id", "client_label", "finding_key", "finding_id",
     "observation_id", "collected_at", "observed_at", "os_family", "provider_id",
@@ -76,12 +77,13 @@ def load_manifest(path: Path) -> list[dict[str, Any]]:
     for index, client in enumerate(clients):
         if not isinstance(client, dict):
             raise FeedError(f"client entry {index} must be an object")
-        if set(client) - {"client_id", "client_label", "observations", "reviews"}:
+        if set(client) - {"client_id", "client_label", "observations", "reviews", "rmm_company_unique_id"}:
             raise FeedError(f"client entry {index} contains unsupported fields")
         client_id = client.get("client_id")
         label = client.get("client_label")
         observations = client.get("observations")
         reviews = client.get("reviews")
+        rmm_company_id = client.get("rmm_company_unique_id")
         if not isinstance(client_id, str) or not CLIENT_ID.fullmatch(client_id):
             raise FeedError(f"client entry {index} has an invalid client_id")
         if client_id in seen_ids:
@@ -91,6 +93,11 @@ def load_manifest(path: Path) -> list[dict[str, Any]]:
         label = label.strip()
         if label.casefold() in seen_labels:
             raise FeedError("client labels must be unique ignoring case")
+        if rmm_company_id is not None:
+            if not isinstance(rmm_company_id, str) or not RMM_COMPANY_ID.fullmatch(rmm_company_id):
+                raise FeedError(f"client entry {index} has an invalid rmm_company_unique_id")
+            if any(entry.get("rmm_company_unique_id") == rmm_company_id for entry in normalized):
+                raise FeedError("duplicate rmm_company_unique_id in manifest")
         if not isinstance(observations, str) or not observations.strip():
             raise FeedError(f"client entry {index} needs an observations directory or file")
         observation_path = outside_public_repo(path.parent / observations, "observation archive")
@@ -118,6 +125,7 @@ def load_manifest(path: Path) -> list[dict[str, Any]]:
             "client_label": label,
             "observations": observation_path,
             "reviews": review_path,
+            "rmm_company_unique_id": rmm_company_id,
         })
     for client in normalized:
         review_path = client["reviews"]

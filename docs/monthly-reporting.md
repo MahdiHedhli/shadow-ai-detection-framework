@@ -55,6 +55,7 @@ Example private manifest (store it only in the secured reporting environment):
     {
       "client_id": "client-a",
       "client_label": "Client A",
+      "rmm_company_unique_id": "<private-RMM-company-ID>",
       "observations": "./client-a/observations",
       "reviews": "./client-a/review-decisions.json"
     }
@@ -84,6 +85,40 @@ not include other clients' rows.
 The RMM automation-history dataset is a separate run-count source and must not be combined with finding metrics. ConnectWise documents CSV-backed datasets using Dropbox or OneDrive, which may provide a path for dedicated findings and scan feeds. Before connecting a source, validate its licensing, refresh behavior, client mapping, and whether the feed can be restricted to an approved folder. Never replace an existing datasource or upgrade a plan implicitly.
 
 The automation-history dataset may include unrelated task records. Do not export it wholesale. Use a task-scoped extraction or dedicated CSV feeds, then verify that client filters, sorting, exports, and review-state hiding consistently apply to the selected client before sharing.
+
+## RMM task export ingestion
+
+When a task-scoped CSV export is available, `tools/import_rmm_task_export.py`
+can validate and append its JSON observations to the private per-client
+archives. Add each source `company_unique_id` to the matching client's private
+manifest as `rmm_company_unique_id`; do not put real company IDs or labels in a
+public example or in this repository. Then run:
+
+```bash
+python3 tools/import_rmm_task_export.py \
+  --input /secure/staging/shadow-ai-task-export.csv \
+  --manifest /secure/shadow-ai/dashboard-clients.json \
+  --task-name "Shadow AI Inventory - Windows"
+```
+
+The input must be a task-filtered CSV containing `company_unique_id`,
+`task_name`, and `execution_output`. The importer independently requires every
+row to match that exact task and a mapped company ID; it rejects a broad export
+containing unrelated task rows, unmapped clients, invalid/oversized JSON,
+conflicting observation IDs, or paths inside this public repository. It
+validates the collector schema, stores immutable JSON files named by
+`observation_id` under the mapped client archives, uses mode `0600` files and
+`0700` archive directories on POSIX, and treats identical re-imports as skips.
+If storage fails mid-run, rerunning the same export is safe: previously stored
+identical observations are skipped. The CSV itself remains in its private
+staging location for the operator's approved retention/deletion process.
+
+The importer does not fetch from BrightGauge or choose storage/retention; a
+task-scoped export workflow and private manifest must be established separately.
+Do not extract or publish the raw `execution_output` field wholesale. After
+importing, use `tools/build_dashboard_feed.py` for BrightGauge CSVs or
+`tools/build_internal_dashboard.py` for the restricted offline technician
+view. Customer-facing HTML remains a separate one-client build.
 
 ## Private internal HTML dashboard
 
