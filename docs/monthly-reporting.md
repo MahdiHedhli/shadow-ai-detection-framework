@@ -83,14 +83,19 @@ Client exports must apply the same selected-client scope to every view and must
 not include other clients' rows.
 
 The existing RMM automation-history dataset is a separate run-count source and
-must not be combined with finding metrics. ConnectWise documents CSV-backed
-datasets using Dropbox or OneDrive, which may provide a path for dedicated
-findings and scan feeds without a bespoke API integration. Before connecting a
-source, validate its licensing, refresh behavior, client mapping, and whether
-the feed can be restricted to an approved folder. Never replace an existing
-datasource or upgrade a plan implicitly. Store only the normalized findings and
-scan feeds in that approved location, never in this public repository or a
-broadly shared folder.
+must not be combined with finding metrics. BrightGauge's Datasets screen
+supports direct CSV upload, which is a candidate for a one-time pilot import.
+For ongoing refresh, ConnectWise documents CSV-backed datasets from Dropbox or
+OneDrive. Keep the two normalized feeds (`findings.csv` and `scans.csv`)
+separate; use the complete accumulated history when rebuilding them so an
+update does not silently discard older observations. Before using direct upload
+or a cloud-backed CSV, verify field typing, update/replace behavior, refresh
+timing, client mapping, and whether the source can be restricted to an approved
+folder. Never replace an existing datasource or upgrade a plan implicitly.
+Store the source archives and generated feeds in approved tenant-controlled
+storage, never in this public repository or a broadly shared folder. See the
+[ConnectWise Datasets guide](https://docs.connectwise.com/BrightGauge/090/005)
+for dataset management steps.
 
 The automation-history dataset may include unrelated task records. Do not export it wholesale. Use a task-scoped extraction or dedicated CSV feeds, then verify that client filters, sorting, exports, and review-state hiding consistently apply to the selected client before sharing.
 
