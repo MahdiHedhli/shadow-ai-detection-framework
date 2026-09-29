@@ -119,6 +119,60 @@ class DiscoverRmmClientsTests(unittest.TestCase):
 
             self.assertEqual([client["client_label"] for client in clients], ["Client A", "Client B"])
 
+    def test_merge_preserves_existing_archive_mapping_and_adds_new_client(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            private = root / "private"
+            private.mkdir(mode=0o700)
+            source = root / "broad.csv"
+            existing = private / "clients.json"
+            output = private / "clients-next.json"
+            prior = {
+                "client_id": "client-existing",
+                "client_label": "Existing Client",
+                "observations": "observations/existing",
+                "rmm_company_unique_id": "company-001",
+            }
+            existing.write_text(json.dumps({"schema_version": "1.0", "clients": [prior]}), encoding="utf-8")
+            self.write_export(source, [{
+                "company_unique_id": "company-002",
+                "company_name": "New Client",
+                "task_name": TASK,
+                "execution_output": "not copied",
+            }])
+
+            self.assertEqual(discover_rmm_clients.write_manifest(source, TASK, output, existing), 2)
+
+            data = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(data["clients"][0], prior)
+            self.assertEqual({client["rmm_company_unique_id"] for client in data["clients"]}, {"company-001", "company-002"})
+            self.assertEqual(len(build_dashboard_feed.load_manifest(output)), 2)
+
+    def test_merge_rejects_display_name_collision_without_overwriting(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            private = root / "private"
+            private.mkdir(mode=0o700)
+            source = root / "broad.csv"
+            existing = private / "clients.json"
+            output = private / "clients-next.json"
+            existing.write_text(json.dumps({"schema_version": "1.0", "clients": [{
+                "client_id": "client-existing",
+                "client_label": "Client A",
+                "observations": "observations/existing",
+                "rmm_company_unique_id": "company-001",
+            }]}), encoding="utf-8")
+            self.write_export(source, [{
+                "company_unique_id": "company-002",
+                "company_name": "client a",
+                "task_name": TASK,
+                "execution_output": "not copied",
+            }])
+
+            with self.assertRaisesRegex(discover_rmm_clients.DiscoveryError, "conflicts with an existing client"):
+                discover_rmm_clients.write_manifest(source, TASK, output, existing)
+            self.assertFalse(output.exists())
+
     def test_rejects_formula_prefixed_or_control_character_company_ids(self) -> None:
         for invalid in ("=Client Name", "@Client Name", "Client\nName"):
             with self.subTest(invalid=repr(invalid)), tempfile.TemporaryDirectory() as temporary:

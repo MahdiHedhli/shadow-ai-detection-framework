@@ -188,6 +188,24 @@ Review the generated private client labels and mappings before the first
 refresh. The manifest and every generated archive/feed/report remain outside
 the public repository.
 
+When a new client appears in later exports, preserve existing archive and
+review mappings by writing a merged manifest beside the current one. The
+merge accepts only company IDs and labels from the exact selected tasks; it
+does not retain task output. It rejects display-name conflicts for manual
+reconciliation.
+
+```bash
+python3 tools/discover_rmm_clients.py \
+  --input /secure/staging/automation-details.csv \
+  --task-name "Shadow AI Inventory - Windows" \
+  --merge-existing /secure/shadow-ai/dashboard-clients.json \
+  --output /secure/shadow-ai/dashboard-clients-next.json
+```
+
+Review the new private mapping, then use it for the refresh. Keep the previous
+manifest until the refresh is verified; the output is a new file and never
+overwrites the existing mapping.
+
 ```bash
 python3 tools/refresh_dashboard_from_rmm_export.py \
   --input /secure/staging/automation-details.csv \

@@ -82,11 +82,47 @@ def discover_clients(input_path: Path, task_names: str | list[str] | tuple[str, 
     return clients
 
 
-def write_manifest(input_path: Path, task_names: str | list[str] | tuple[str, ...], output_path: Path) -> int:
+def write_manifest(
+    input_path: Path,
+    task_names: str | list[str] | tuple[str, ...],
+    output_path: Path,
+    merge_existing: Path | None = None,
+) -> int:
     destination = build_dashboard_feed.outside_public_repo(output_path, "private client manifest")
     if output_path.is_symlink() or destination.exists():
         raise DiscoveryError("manifest output must be a new, non-symbolic-link file")
     clients = discover_clients(input_path, task_names)
+    if merge_existing is not None:
+        existing_path = build_dashboard_feed.outside_public_repo(merge_existing, "existing private client manifest")
+        if merge_existing.is_symlink() or existing_path == destination:
+            raise DiscoveryError("existing manifest must be a separate non-symbolic-link file")
+        if existing_path.parent.resolve() != destination.parent.resolve():
+            raise DiscoveryError("merged manifest must be written beside the existing manifest to preserve archive paths")
+        try:
+            existing_data = json.loads(existing_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise DiscoveryError(f"could not read existing private manifest: {exc}") from exc
+        try:
+            build_dashboard_feed.load_manifest(existing_path)
+        except build_dashboard_feed.FeedError as exc:
+            raise DiscoveryError(f"existing private manifest is invalid: {exc}") from exc
+        existing_clients = existing_data["clients"]
+        by_company = {client["rmm_company_unique_id"]: client for client in existing_clients}
+        known_labels = {client["client_label"].casefold() for client in existing_clients}
+        additions = []
+        for client in clients:
+            old = by_company.get(client["rmm_company_unique_id"])
+            if old is not None:
+                if old["client_label"].casefold() != client["client_label"].casefold():
+                    raise DiscoveryError("an existing company ID has a conflicting display name; review the mapping manually")
+                continue
+            if client["client_label"].casefold() in known_labels:
+                raise DiscoveryError("a discovered display name conflicts with an existing client; review the mapping manually")
+            if any(old_entry["client_id"] == client["client_id"] for old_entry in existing_clients):
+                raise DiscoveryError("a discovered pseudonymous client ID conflicts with an existing client mapping")
+            additions.append(client)
+            known_labels.add(client["client_label"].casefold())
+        clients = [*existing_clients, *additions]
     payload = json.dumps({"schema_version": "1.0", "clients": clients}, ensure_ascii=False, indent=2) + "\n"
     try:
         build_dashboard_feed.ensure_private_directory(destination.parent, "manifest directory")
@@ -114,14 +150,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--input", required=True, type=Path, help="BrightGauge/RMM CSV source; left unchanged")
     parser.add_argument("--task-name", required=True, action="append", help="exact scanner task name; repeat to discover across additional platforms or versions")
     parser.add_argument("--output", required=True, type=Path, help="new private manifest path outside this repository")
+    parser.add_argument("--merge-existing", type=Path, help="preserve existing client mappings and add newly discovered ones; output must be beside this manifest")
     args = parser.parse_args(argv)
     try:
-        count = write_manifest(args.input, args.task_name, args.output)
+        count = write_manifest(args.input, args.task_name, args.output, args.merge_existing)
     except (DiscoveryError, import_rmm_task_export.ImportError, build_dashboard_feed.FeedError, OSError) as exc:
         print(f"Could not create private RMM client manifest: {exc}", file=sys.stderr)
         return 1
-    print(f"Created a private manifest for {count} companies represented in the selected exact scanner tasks.")
-    print("Only company names and IDs were retained; execution output and unrelated task rows were not copied.")
+    if args.merge_existing:
+        print(f"Created a merged private manifest with {count} client mappings; existing archive paths were preserved.")
+        print("Selected task output was not copied; unrelated task rows were not retained.")
+    else:
+        print(f"Created a private manifest for {count} companies represented in the selected exact scanner tasks.")
+        print("Only company names and IDs were retained; execution output and unrelated task rows were not copied.")
     return 0
 
 
