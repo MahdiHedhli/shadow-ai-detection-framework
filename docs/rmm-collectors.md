@@ -6,6 +6,8 @@ The generated collectors add a portable endpoint-inventory layer for clients tha
 
 - `dist/rmm-windows/ShadowAIInventory.ps1` supports Windows PowerShell 5.1 or later.
 - `dist/rmm-macos-linux/shadow_ai_inventory.py` supports Python 3 using only the standard library.
+- `dist/rmm-macos-linux/shadow_ai_inventory.pl` is a macOS-native fallback for devices without Python; it uses the macOS Perl `JSON::PP` module and SQLite command-line utility.
+- `dist/rmm-macos-linux/shadow_ai_inventory_rmm.sh` bundles that Perl fallback for RMM products whose macOS task editor executes Bash. It embeds the Perl source, writes it to a mode-0600 temporary file during execution, and removes the file on exit; endpoints do not download code.
 - `schema/observation.schema.json` is the platform-neutral output contract.
 - `tools/validate_observation.py` performs dependency-free structural and privacy checks.
 
@@ -20,6 +22,8 @@ The `Update browser extension inventory` GitHub workflow runs every Monday at 07
 ## Privacy and security boundary
 
 The collectors inspect process metadata and a bounded set of known application, model, MCP configuration, browser-extension, and browser-history locations for every discovered local user profile. Extension inventory covers Firefox plus stable, Beta, Dev, and Canary variants of Chrome and Edge where supported, along with Brave, Chromium, Vivaldi, Arc, and Opera-family profile locations. Browser extensions are classified locally using exact IDs from `catalog/browser_extensions.csv` first, then specific product-name patterns from `catalog/browser_extension_name_patterns.csv`. Chromium collectors also inspect the bounded manifest index inside `Preferences` and `Secure Preferences`, plus presence-only directories for cataloged IDs under `Local Extension Settings` and `Sync Extension Settings`. This covers registered extensions whose package directory is absent or staged elsewhere and extensions that use a different store ID. Only matched extension metadata is emitted. For profiles with extensions, the collector also emits total and classified counts so coverage gaps can be measured without disclosing unrelated extension IDs or names. Permissions, descriptions, preference contents, and manifest contents are never reported. Exact-ID package-directory matches are high confidence; preference-index, extension-state, and local name fallback matches are medium confidence. State-directory presence can be stale and does not prove current execution. The collectors do not perform a whole-disk search or follow symbolic links/reparse points.
+
+The Perl macOS fallback intentionally implements the core bounded checks (processes, known model/MCP paths, exact cataloged Chromium extension IDs, and Chrome/Edge/Brave/Chromium/Firefox history hostnames). It uses only the OS-provided Perl/JSON::PP and SQLite command-line utility, does not install software, and does not require Xcode Command Line Tools. Its narrower extension coverage does not include manifest-name/domain fallbacks, extension-state directories, Safari history, or installed-software inventory; `scope` lists only the checks it actually performs. Prefer the Python collector when a working Python 3 runtime already exists. The Perl fallback is macOS-only and has a metadata-only `--self-test` mode.
 
 On Windows, installed-software coverage combines machine uninstall keys, the current-user key, uninstall keys from user hives that Windows already has loaded, `Get-AppxPackage -AllUsers`, and bounded known application locations. The collector never loads offline user registry hives. Current Claude Desktop deployments are detected through their `Claude` MSIX package; the bounded `%LOCALAPPDATA%\AnthropicClaude` check covers the legacy standalone installer.
 
@@ -60,6 +64,29 @@ This convention intentionally avoids using a nonzero exit code to signal that AI
 
 For RMMs that execute PowerShell scripts and retain task output, package the generated Windows collector as a versioned, read-only custom task (for example, `Shadow AI Inventory - Windows`). Embed the reviewed `dist/rmm-windows/ShadowAIInventory.ps1` contents in the task; do not make endpoints download or execute a mutable script from a public URL. Set the expected run time from pilot measurements with a conservative ceiling, retain standard output for exit codes 0 and 2, alert on exit code 1, and flag exit code 2 for collection-health review. Run the self-test before the first collection, then assign only to a consented pilot device group.
 
+For an authorized macOS pilot in ConnectWise RMM's **Bash Script** editor, paste `dist/rmm-macos-linux/shadow_ai_inventory_rmm.sh`, not the raw `.pl` file: the editor invokes Bash, which then calls the built-in `/usr/bin/perl`. Give the task a distinct name such as `Shadow AI Inventory - macOS (Perl)` so task history and exports can be scoped precisely. First run a self-test bundle built with `python3 tools/build_perl_rmm_bundle.py --output /secure/path/shadow-ai-inventory-rmm.sh --self-test` and confirm it returns one schema-shaped JSON observation with an empty findings list. The regular build omits that self-test flag and performs the bounded collection. If the RMM runner cannot pass script arguments, use a separate self-test bundle for the one-time check; do not leave the self-test argument in the production task. The Perl fallback covers only its documented bounded macOS scope; prefer Python 3 when it is already available and validated, but do not install Python fleet-wide solely for this inventory. Start with the authorized pilot group and review partial/error status before expansion.
+
+The RMM task output is the handoff into reporting: retain the JSON as task output, export only that scanner task, then process it through the private importer/refresh command in [Monthly collection and reporting](monthly-reporting.md#rmm-task-export-ingestion). Give it a distinct name where the RMM allows. If the RMM emits a generic task label, scope the export to only the scanner's executions before download; the importer requires an exact `task_name` and intentionally rejects mixed-task exports rather than silently combining unrelated output.
+
+### BrightGauge latest-state summary via endpoint custom fields
+
+ConnectWise RMM's Script Editor can map a script step's `%output%` to an
+endpoint custom field with its **Set Custom Field** function. BrightGauge also
+has a Command datasource dataset named **Custom Endpoint Fields**; in the
+RampUp account it is described as syncing hourly and always showing the latest
+information. This is a viable companion view for a small, bounded per-device
+summary (for example, scan status, last-scan time, finding count, and collector
+version), after a one-endpoint write-back test confirms the exact field types
+and values appear in that dataset.
+
+This is not the findings-history pipeline: custom-field values are latest-state
+per endpoint, so later runs replace the previous value. Do not map the full
+scanner JSON, browser-history evidence, user/profile details, or MCP paths into
+custom fields. The RMM custom-fields screen warns against using fields to
+retrieve personally identifiable information, and a summary field cannot
+preserve finding-level history. Keep full task JSON in the task output and use
+the task-scoped export/import process for historical findings and scan feeds.
+
 Validate Windows browser-history and extension coverage against approved known-positive and negative-control endpoints before expanding a pilot. Review lower-confidence name- or manifest-domain-based extension matches before treating them as confirmed products; exact catalog-ID matches provide stronger evidence. Keep pilot telemetry and target identities out of this public repository.
 
 Do not schedule a broad fleet rollout based only on task success. First review output size, run time, coverage summaries, low-confidence matches, and tenant authorization. Weekly collection is a reasonable initial pilot cadence when approved. Historical inventory must be append-only and tenant-isolated: retain each observation with its collection timestamp, collector version, stable device identity, and a pseudonymous subject identifier where possible. Avoid overwriting the prior run with the latest result. Apply the customer's retention period and restrict report access because observations include endpoint and local-user identifiers.
@@ -80,6 +107,14 @@ Do not enable automated removal or blocking directly from these inventory findin
 
 ```bash
 python3 shadow_ai_inventory.py --self-test | python3 tools/validate_observation.py
+```
+
+```bash
+perl shadow_ai_inventory.pl --self-test | python3 tools/validate_observation.py
+```
+
+```bash
+bash shadow_ai_inventory_rmm.sh --self-test | python3 tools/validate_observation.py
 ```
 
 Self-test emits an empty observation and does not enumerate profiles, processes, installed software, browser extensions, or browser history.

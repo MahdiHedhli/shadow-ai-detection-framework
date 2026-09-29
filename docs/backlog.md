@@ -48,7 +48,9 @@ This backlog records work that should not be promoted to production until it has
 
 - Use the RMM task history as a pilot source only when it preserves full output, enforces tenant-scoped access, and supports validated export.
 - Implement and validate the self-contained client HTML report builder; keep archives and review decisions out of public GitHub.
-- Choose and approve a tenant-isolated storage location, retention period, monthly schedule (proposed three scans/month), report date, access rules, and distribution channel before enabling automation.
+- Make the technician dashboard reflect each endpoint's latest validated scan as the primary operational view; show freshness and partial/no-scan states rather than waiting for a monthly cycle.
+- Use a reviewed, client-scoped monthly email report (PDF snapshot) as the initial history mechanism. A long-term scan archive is optional unless a later audit or recalculation requirement calls for it.
+- Before automation, confirm scan cadence, a tenant-isolated working location, short-term retention/deletion rules, report date, recipient mapping, and access controls.
 - Keep each RMM pilot scoped to its approved endpoint group; successful task execution is not permission to scan an entire client fleet.
 - Export and validate task observations, render a client-private HTML report, and verify known-positive/negative controls before expanding scope. Keep source outputs in tenant-restricted storage.
 - Save a reusable, versioned RMM task from a reviewed distribution artifact. Keep endpoint execution offline/self-contained; do not fetch a mutable script at runtime.

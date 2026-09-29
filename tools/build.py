@@ -498,6 +498,15 @@ def main() -> int:
     specs = validate_specs()
     tokens = build_tokens(domains, artifacts, browser_extensions, browser_extension_names)
     paths = render_templates(tokens)
+    # The ConnectWise RMM script editor executes Bash. Bundle the canonical
+    # Perl fallback as an inline, self-contained Bash task artifact so operators
+    # do not paste Perl into a Bash interpreter or make endpoints fetch code.
+    import build_perl_rmm_bundle
+
+    perl_source = (DIST_DIR / "rmm-macos-linux" / "shadow_ai_inventory.pl").read_text(encoding="utf-8")
+    perl_bundle = Path("rmm-macos-linux") / "shadow_ai_inventory_rmm.sh"
+    safe_write(perl_bundle, build_perl_rmm_bundle.make_bundle(perl_source))
+    paths.append(perl_bundle)
     paths.append(build_watchlist(domains))
     safe_write(Path("catalog") / "ai_domains.txt", "\n".join(sorted(row["indicator"] for row in domains)) + "\n")
     paths.append(Path("catalog") / "ai_domains.txt")

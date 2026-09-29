@@ -54,8 +54,16 @@
       "sha256": "89b2c4a986eec93af351c2d97e7582070c005659d97b80e59921997c10dbb8f3"
     },
     {
+      "path": "rmm-macos-linux/shadow_ai_inventory.pl",
+      "sha256": "afab8f942c9f7134090cc8f0c58d6d2ce9d61703eaad2c10cd30fbbf27b211cc"
+    },
+    {
       "path": "rmm-macos-linux/shadow_ai_inventory.py",
       "sha256": "aec53cda1e0f15d5aabc66d4fa685ffbca27293d3aef49b0db06e21a0c39f873"
+    },
+    {
+      "path": "rmm-macos-linux/shadow_ai_inventory_rmm.sh",
+      "sha256": "c97e23b8a8e5e412cbf39400485ce6ae58b02572fefe3c8ed10bfac75c8d6afc"
     },
     {
       "path": "rmm-windows/ShadowAIInventory.ps1",
@@ -66,5 +74,5 @@
       "sha256": "a0f55634bb45f224fafff0cb42223ec963fd2a3e17af3c4a39e22a4704960c22"
     }
   ],
-  "generated_on": "2026-09-28"
+  "generated_on": "2026-09-29"
 }

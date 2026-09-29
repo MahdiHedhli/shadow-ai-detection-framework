@@ -1,6 +1,10 @@
-# Monthly Shadow AI collection and reporting
+# Shadow AI collection and reporting
 
-This is the proposed operating method for using the RMM collector and HTML report builder. It is a design/runbook only; it does not create an RMM schedule, choose storage, or authorize a client-wide deployment.
+This is the proposed operating method for using the RMM collector and report builder. It is a design/runbook only; it does not create an RMM schedule, choose storage, or authorize a client-wide deployment.
+
+## Reporting priority
+
+The primary view should describe the **latest known scan state** for the selected client or internal MSP-wide scope: current findings, current review dispositions, scan health, and the last successful collection time. Historical trends are secondary. A monthly emailed client report (optionally attached as PDF) is an acceptable history snapshot, and retaining those delivered reports is sufficient for the current history requirement. A machine-readable archive remains optional unless later row-level filtering, recalculation, or audit needs justify it. Until the live source path is validated, do not present stale or missing observations as current, and label the data's actual scan time.
 
 ## Pilot path
 
@@ -18,6 +22,10 @@ After the pilot has passed review and the client approves recurring collection, 
 
 This cadence is a proposal, not an active schedule. Before enabling it, document the client's approval, exact device group, timezone, retries/offline handling, RMM output retention, maximum output size, review owner, and stop/rollback path. Review the first two cycles before treating it as steady state.
 
+## Monthly emailed report as the history snapshot
+
+For the current reporting goal, an emailed monthly client report is an acceptable history snapshot. BrightGauge can schedule a client report daily, weekly, or monthly and optionally attach a PDF. Build it from validated scan data, include the observation window and last successful scan time, and keep client mapping and recipient scope isolated. The delivered email/PDF is sufficient as the historical snapshot; separately retaining it in a restricted location is optional. This PDF is a presentation snapshot, not a machine-readable scan archive; it cannot support later row-level filtering or recalculation. Keep the current operational view separate from this monthly snapshot. Before enabling delivery, verify recipients, client mapping, and report scope. BrightGauge's [Client Reporting guide](https://docs.connectwise.com/BrightGauge/070/030) documents recurring schedules and optional PDF attachments.
+
 ## Storage and access controls
 
 Do not use this public GitHub repository as telemetry storage. Compare these options for the pilot client and select one with the client's retention and access requirements:
@@ -32,12 +40,13 @@ Keep one archive directory and one customer report output per client. The custom
 
 For an MSP-wide technician view, `tools/build_dashboard_feed.py` creates two
 BrightGauge-friendly CSVs from separate, validated client archives: one row per
-finding observation and a separate scan-coverage feed. A private manifest maps
+finding in each endpoint's latest scan and a separate latest-scan coverage
+feed. A private manifest maps
 each stable `client_id` and display label to its own archive and optional review
 file. The script preserves that tenant boundary when reading reviews and never
 places endpoint hostnames, local usernames, reviewer names, or review reasons in
-the dashboard feeds. It includes a stable pseudonymous finding key so repeated
-observations and review status can be correlated; treat that key, client labels,
+the dashboard feeds. It includes a stable pseudonymous finding key so a current
+signal and review status can be correlated; treat that key, client labels,
 extension IDs, domains, and both CSVs as confidential telemetry.
 
 Keep the manifest, source archives, and generated CSVs outside this public
@@ -72,41 +81,148 @@ python3 tools/build_dashboard_feed.py \
   --period 2026-09
 ```
 
-The findings feed's grain is one finding event per scan; it is not a count of
-unique devices or currently active findings. Use `finding_key` for a distinct
-finding identity across versions/scans, while keeping `finding_id` and
-`observation_id` as event identifiers. The scans feed has one row per
-observation and emits `no_observations` rather than implying a clean scan when a
-client has no data for the selected period. The two feeds can power client,
+The findings feed's grain is one finding in each endpoint's latest scan. The
+scans feed has one row per endpoint's latest scan and preserves a latest scan
+with zero findings; it emits `no_observations` rather than implying a clean scan
+when a client has no data for the selected period. The feeds do not backfill
+older findings when a newer scan omits them. Use `finding_key` as the stable,
+pseudonymous signal identity. The two feeds can power client,
 provider, product, category, confidence, evidence, and review-state filters.
 Client exports must apply the same selected-client scope to every view and must
 not include other clients' rows.
 
 The existing RMM automation-history dataset is a separate run-count source and
-must not be combined with finding metrics. BrightGauge's Datasets screen
-supports direct CSV upload, which is a candidate for a one-time pilot import.
-For ongoing refresh, ConnectWise documents CSV-backed datasets from Dropbox or
-OneDrive. Keep the two normalized feeds (`findings.csv` and `scans.csv`)
-separate; use the complete accumulated history when rebuilding them so an
-update does not silently discard older observations. Before using direct upload
-or a cloud-backed CSV, verify field typing, update/replace behavior, refresh
-timing, client mapping, and whether the source can be restricted to an approved
-folder. Never replace an existing datasource or upgrade a plan implicitly.
-Store the source archives and generated feeds in approved tenant-controlled
-storage, never in this public repository or a broadly shared folder. See the
-[ConnectWise Datasets guide](https://docs.connectwise.com/BrightGauge/090/005)
-for dataset management steps.
+must not be combined with finding metrics. BrightGauge's **Upload CSV** dataset
+workflow uses a connected Dropbox or OneDrive datasource; it is not a
+standalone local-file ingestion path. Check datasource availability and plan
+capacity before treating it as a pilot option. Keep the two normalized feeds
+(`findings.csv` and `scans.csv`) separate. The feeds are current-state outputs,
+not historical trend stores. A short-lived, restricted working archive must
+retain enough observations to select the latest scan per endpoint and build the
+current month's report, then can follow an approved retention/deletion schedule
+after the report is delivered. The emailed report/PDF is the agreed historical
+snapshot for this first version.
+Before connecting the CSVs, verify field typing, update/replace behavior,
+refresh timing, client mapping, and whether the source can be restricted to an
+approved folder. Each upload/refresh must contain the full latest-state view for
+all mapped clients, not only endpoints scanned during that run. Never replace an
+existing datasource or upgrade a plan
+implicitly. Store the source archives and generated feeds in approved
+tenant-controlled storage, never in this public repository or a broadly shared
+folder. See the [ConnectWise Datasets guide](https://docs.connectwise.com/BrightGauge/090/005)
+and [dataset documentation index](https://docs.connectwise.com/BrightGauge/Reports_and_Dashboards_%28formerly_BrightGauge%29_Documentation_Site_Map)
+for the dataset workflow.
 
 The automation-history dataset may include unrelated task records. Do not export it wholesale. Use a task-scoped extraction or dedicated CSV feeds, then verify that client filters, sorting, exports, and review-state hiding consistently apply to the selected client before sharing.
 
+### Current-state summary through RMM custom endpoint fields
+
+BrightGauge's **Custom Endpoint Fields** dataset is generally available and
+ConnectWise documents it as hourly, latest-value data. It may provide the
+current-state summary path without adding another datasource: populate a small
+typed set of endpoint fields from the RMM task, then build per-client gauges
+from that dataset. This is not yet verified end to end. First prove on one
+authorized pilot endpoint that the RMM Script Editor can write the required
+fields from scanner output and that BrightGauge synchronizes those values.
+
+Keep field values to non-sensitive scalars such as last-scan time, scan status,
+and finding counts. Do not store raw observation JSON, local usernames,
+browser-history entries, matched domains, or full extension metadata in custom
+fields. This route is a summary, not a replacement for the finding-level HTML
+table and selected-client CSV export. See the [ConnectWise RMM/BrightGauge
+dataset guide](https://docs.connectwise.com/BrightGauge/040/010/BrightGauge_-_Connect_to_ConnectWise_RMM_%28formerly_Command%29)
+for the Custom Endpoint Fields dataset and its refresh behavior.
+
 ## RMM task export ingestion
+
+### Existing BrightGauge Automation Details source
+
+The existing ConnectWise RMM **Automation Details** dataset can serve as the
+export source for the first ingestion test: its visible schema includes
+`company_unique_id`, `task_name`, and `execution_output`, which are the
+importer's required columns. The current pilot gauge aggregates task IDs into
+run counts; that view is not a finding inventory. Use the dataset's row-level
+records and filter to one exact Shadow AI scanner task before extracting. Do
+not include unrelated automation rows.
+
+This is an extraction source, not durable history. ConnectWise documents that
+Automation Details is synchronized every 24 hours using only the latest two
+days of source data (although the source describes up to three months of daily
+availability). The current importer uses a private observation archive as
+working storage so the latest endpoint state can be rebuilt from validated
+records; the archive is not required as a long-term historical system of
+record. The delivered monthly email/PDF can serve as history. Verify the actual
+export columns and task-output format on a restricted sample before importing
+a larger segment. If the
+tenant's CSV export delivers the file by email rather than directly to
+restricted staging, do not use that workflow as unattended collection; choose
+an approved retrieval path first.
 
 When a task-scoped CSV export is available, `tools/import_rmm_task_export.py`
 can validate and append its JSON observations to the private per-client
 archives. Add each source `company_unique_id` to the matching client's private
 manifest as `rmm_company_unique_id`; do not put real company IDs or labels in a
-public example or in this repository. For a single repeatable refresh of the
-archive, both BrightGauge CSV feeds, and the sortable technician HTML view, run:
+public example or in this repository. If the UI only provides a broader
+Automation Details export, use the one-command refresh below. It performs the
+exact-task reduction in restricted temporary storage before import; never load
+the broad export itself directly into the dashboard pipeline.
+
+For a first refresh without an existing manifest, `tools/discover_rmm_clients.py`
+can create a private mapping from only the selected task's `company_unique_id`
+and `company_name` columns. It never copies `execution_output` or unrelated task
+rows, creates pseudonymous client IDs and per-client archive paths, and refuses
+ambiguous company names so they can be reconciled manually.
+
+```bash
+python3 tools/discover_rmm_clients.py \
+  --input /secure/staging/automation-details.csv \
+  --task-name "Shadow AI Inventory - Windows" \
+  --output /secure/shadow-ai/dashboard-clients.json
+```
+
+Review the generated private client labels and mappings before the first
+refresh. The manifest and every generated archive/feed/report remain outside
+the public repository.
+
+```bash
+python3 tools/refresh_dashboard_from_rmm_export.py \
+  --input /secure/staging/automation-details.csv \
+  --manifest /secure/shadow-ai/dashboard-clients.json \
+  --task-name "Shadow AI Inventory - Windows" \
+  --staging-dir /secure/staging/shadow-ai \
+  --output-dir /secure/shadow-ai/brightgauge-feed \
+  --dashboard /secure/shadow-ai/internal-dashboard.html
+```
+
+This command validates and imports only the exact task rows whose RMM company
+IDs are mapped in the private manifest. It leaves the broad source unchanged,
+removes the temporary task-only CSV, and rebuilds the feeds/dashboard from the
+latest state in the private working archive. Existing outputs are protected
+unless `--overwrite` is supplied. It does not upload data to BrightGauge or
+configure a schedule.
+
+For a two-step process that keeps a task-only CSV for separate review, use the
+local reducer below before running `tools/refresh_dashboard.py`:
+
+```bash
+python3 tools/filter_rmm_task_export.py \
+  --input /secure/staging/automation-details.csv \
+  --manifest /secure/shadow-ai/dashboard-clients.json \
+  --task-name "Shadow AI Inventory - Windows" \
+  --output /secure/staging/shadow-ai-task-only.csv
+```
+
+The reducer streams the source without changing it, skips rows for other tasks
+without parsing or copying their output, and accepts only company IDs mapped in
+the private manifest. It validates selected scanner JSON, writes only the
+three required columns to a new file with mode `0600` inside a `0700` staging
+directory, and refuses to overwrite. Keep both source and reduced export in
+restricted storage and follow the approved source-retention process; do not
+print either file's contents or commit them to this repository. This is a
+fallback intake step, not authorization to create or export a broad dataset.
+
+For a single repeatable refresh of the archive, both BrightGauge CSV feeds, and
+the sortable technician HTML view, run:
 
 ```bash
 python3 tools/refresh_dashboard.py \
@@ -117,8 +233,10 @@ python3 tools/refresh_dashboard.py \
   --dashboard /secure/shadow-ai/internal-dashboard.html
 ```
 
-Use `--period YYYY-MM` only when a month-specific view is intended. The
-default rebuilds from the complete accumulated archive. The command refuses
+Omit `--period` for present state. Use `--period YYYY-MM` only when selecting
+the latest scan per endpoint within a particular month. The default rebuilds
+from the complete working archive so endpoints not scanned in the newest run
+remain represented by their latest known scan. The command refuses
 to replace existing feed or dashboard files unless `--overwrite` is supplied;
 re-importing identical observation IDs is safe and idempotent. It does not
 upload to BrightGauge or configure a refresh schedule: upload the two feeds
@@ -179,24 +297,27 @@ and validated archives:
 ```bash
 python3 tools/build_internal_dashboard.py \
   --manifest /secure/shadow-ai/dashboard-clients.json \
-  --output /secure/shadow-ai/internal-dashboard.html \
-  --period 2026-09
+  --output /secure/shadow-ai/internal-dashboard.html
 ```
 
-Omit `--period` to include all available history. The dashboard opens to an
-all-client view for the archives in the private manifest. A technician can
-scope the dashboard to one client; the selected scope applies to its summary
-metrics, charts, and rows. It supports month, provider/product, finding type,
-confidence, review-state, and text filters; sortable finding columns; a
-sortable client comparison table with finding-observation, distinct-finding,
-review, and scan-health values; client/provider breakdowns; and scan coverage.
-Finding values honor every active filter. Scan-health values honor client and
-month filters because scan records are separate from findings. Its customer
-CSV export stays disabled until one client is selected and exports only that
-client's currently filtered rows. Endpoint and local-user identities, reviewer
-names, and review reasons are omitted from this multi-client view and customer
-CSV. For a fuller customer-facing HTML report with endpoint details, continue
-using `tools/build_report.py` once per client.
+The dashboard opens to the latest scan per endpoint from the restricted working
+archive. If `--period YYYY-MM` is supplied, it selects each endpoint's latest
+scan within that month; omit it for the latest scan regardless of month. A
+technician can scope the dashboard to one client; the selected scope applies
+to summary metrics, charts, findings, and exports. It supports provider/product,
+finding type, confidence, review-state, and text filters; sortable finding
+columns; a sortable client comparison table with finding counts, scan health,
+and oldest latest scan time per client; and scan-health status. Finding values
+honor every active finding filter. Endpoint counts reflect only scan
+records present in the archive and are not a verified fleet denominator. A
+latest partial scan remains partial; older findings are not backfilled into the
+present-state view. Customer CSV export stays disabled until one client is
+selected and exports only that client's currently filtered findings. Endpoint
+and local-user identities, reviewer names, and review reasons are omitted from
+this multi-client view and customer CSV. Use the separate monthly client report
+for historical context and retain its PDF as the human-readable monthly
+snapshot. For a fuller customer-facing HTML report with endpoint details,
+continue using `tools/build_report.py` once per client.
 
 The output is a self-contained file embedding the included client telemetry;
 it makes no network requests and has no built-in SSO/MFA protection. The
@@ -228,7 +349,9 @@ Use the standalone HTML as the filterable report. A printed/PDF copy is a static
 
 ## Distribution and automation
 
-Before enabling automated report distribution, configure verified recipients, client-specific permissions, an approved channel, and a clear per-client versus internal audience. Never distribute a report containing another client's data.
+The preferred history mechanism is a **monthly client-scoped report delivered by email**, with a PDF attachment retained as that month's snapshot. Once a findings-level BrightGauge dataset is connected and its client mappings and report filters have been verified, use BrightGauge Client Reporting's native monthly schedule and PDF attachment option rather than building a separate email sender. BrightGauge supports scheduled client reports and an optional PDF attachment; the documented attachment limit is 25 MB. See [ConnectWise Client Reporting](https://docs.connectwise.com/BrightGauge/070/030).
+
+Until that data path is ready, generate and review each client's report from the private working observations, then deliver it only through an approved channel to verified recipients. Do not send the all-client technician dashboard or a multi-client feed as a history artifact. Before enabling automated distribution, configure verified recipients, client-specific permissions, an approved channel, and a clear per-client versus internal audience. Never distribute a report containing another client's data. Long-term machine-readable scan retention is optional for this first version; retain it only if a later audit or recalculation requirement justifies the added data lifecycle.
 
 After the mechanics are validated, deploy the report and automation workflow in an appropriate private organization repository and configure a tenant-aware job there. The public repository should contain generic collector/report code, schemas, and tests only. Keep client configuration, observations, decisions, credentials, storage URLs, recipient lists, and generated reports in private tenant-controlled systems.
 

@@ -118,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(f"Archived {added} new observations; {skipped} identical observations were already present.")
-    print(f"Built private findings feed ({finding_count} observation rows): {findings}")
+    print(f"Built private latest-state findings feed ({finding_count} finding rows): {findings}")
     print(f"Built private scan coverage feed ({scan_count} rows): {scans}")
     print(f"Built private sortable technician dashboard: {dashboard}")
     print("All outputs contain confidential telemetry; connect only from approved, access-controlled locations.")

@@ -193,6 +193,50 @@ class DashboardFeedTests(unittest.TestCase):
         self.assertEqual(rows[0]["finding_id"], document["findings"][0]["finding_id"])
         self.assertEqual(len(rows[0]["finding_key"]), 64)
 
+    def test_brightgauge_feed_uses_latest_scan_per_endpoint_without_backfilling(self) -> None:
+        older = observation("TEST-ENDPOINT", "anthropic", "browser_extension", {"extension_name": "Claude"})
+        older["collected_at"] = "2026-09-15T12:00:00.000Z"
+        older["findings"][0]["observed_at"] = older["collected_at"]
+
+        latest_clean = observation("TEST-ENDPOINT", "openai", "browser_extension", {})
+        latest_clean["collected_at"] = "2026-09-25T12:00:00.000Z"
+        latest_clean["findings"] = []
+
+        other_endpoint = observation("OTHER-ENDPOINT", "openai", "software", {"display_name": "ChatGPT"})
+        other_endpoint["collected_at"] = "2026-09-20T12:00:00.000Z"
+        other_endpoint["findings"][0]["observed_at"] = other_endpoint["collected_at"]
+
+        with tempfile.TemporaryDirectory() as temporary:
+            archive = Path(temporary) / "observations"
+            archive.mkdir()
+            for document in (older, latest_clean, other_endpoint):
+                (archive / f"{document['observation_id']}.json").write_text(
+                    json.dumps(document), encoding="utf-8"
+                )
+            providers, products = feed.build_report.load_provider_names()
+            findings, scans = feed.load_client_data(
+                {
+                    "client_id": "client-a",
+                    "client_label": "Client A",
+                    "observations": archive,
+                    "reviews": None,
+                },
+                None,
+                providers,
+                products,
+            )
+            findings_csv = feed.make_csv(findings, feed.FINDING_FIELDS)
+            scans_csv = feed.make_csv(scans, feed.SCAN_FIELDS)
+
+        self.assertEqual(len(scans), 2)
+        self.assertEqual({row["finding_observations"] for row in scans}, {0, 1})
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["provider_id"], "openai")
+        self.assertIn("ChatGPT", findings_csv)
+        self.assertNotIn("Claude", findings_csv)
+        self.assertNotIn("TEST-ENDPOINT", findings_csv + scans_csv)
+        self.assertNotIn("OTHER-ENDPOINT", findings_csv + scans_csv)
+
 
 if __name__ == "__main__":
     unittest.main()

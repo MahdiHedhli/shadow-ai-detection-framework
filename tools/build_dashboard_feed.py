@@ -186,6 +186,10 @@ def load_client_data(
             "schema_version": MANIFEST_SCHEMA_VERSION,
             "client_id": client["client_id"],
             "client_label": client["client_label"],
+            # Used only in-memory by the internal current-state dashboard to
+            # choose one latest observation per endpoint. Feed schemas omit it.
+            "_endpoint_key": observation["device"]["hostname"].casefold(),
+            "_observation_id": observation["observation_id"],
             "period": period or observation["collected_at"][:7],
             "collected_at": observation["collected_at"],
             "os_family": observation["device"]["os_family"],
@@ -226,6 +230,10 @@ def load_client_data(
                 "evidence_level": finding["evidence_level"],
                 "review_status": review.get("status", "open"),
                 "reviewed_at": review.get("reviewed_at", ""),
+                # Private in-memory lineage used to reduce the BrightGauge
+                # feed to each endpoint's latest scan. It is not exported.
+                "_endpoint_key": observation["device"]["hostname"].casefold(),
+                "_observation_id": observation["observation_id"],
             }
             for name in SAFE_ATTRIBUTES:
                 row[name] = safe_attribute(attributes, name)
@@ -245,7 +253,35 @@ def load_client_data(
             "finding_observations": 0,
             "scope": "",
         })
-    return finding_rows, scan_rows
+
+    # BrightGauge is the operational present-state view. Keep only each
+    # endpoint's latest scan and its findings; a latest scan with no findings
+    # must replace, not inherit, older findings. The private archive remains
+    # available for the monthly emailed report snapshot.
+    latest_by_endpoint: dict[str, dict[str, Any]] = {}
+    for scan in scan_rows:
+        endpoint_key = scan.get("_endpoint_key")
+        observation_id = scan.get("_observation_id")
+        if not endpoint_key or not observation_id:
+            continue
+        previous = latest_by_endpoint.get(str(endpoint_key))
+        ordering = (str(scan.get("collected_at", "")), str(observation_id))
+        if previous is None or ordering > (
+            str(previous.get("collected_at", "")), str(previous.get("_observation_id", ""))
+        ):
+            latest_by_endpoint[str(endpoint_key)] = scan
+
+    latest_ids = {
+        str(scan["_observation_id"])
+        for scan in latest_by_endpoint.values()
+        if scan.get("_observation_id")
+    }
+    current_scans = [*latest_by_endpoint.values()]
+    if not observations:
+        # Retain the explicit client-level no-observations row.
+        current_scans.extend(scan for scan in scan_rows if scan.get("scan_status") == "no_observations")
+    current_findings = [row for row in finding_rows if row.get("_observation_id") in latest_ids]
+    return current_findings, current_scans
 
 
 def make_csv(rows: list[dict[str, Any]], fields: list[str]) -> str:
@@ -324,8 +360,8 @@ def main(argv: list[str] | None = None) -> int:
     except (FeedError, build_report.ReportError, OSError) as exc:
         print(f"Could not build dashboard feed: {exc}", file=sys.stderr)
         return 1
-    print(f"Wrote private findings feed ({len(finding_rows)} observation rows): {output_paths[0]}")
-    print(f"Wrote private scan coverage feed ({len(scan_rows)} rows): {output_paths[1]}")
+    print(f"Wrote private latest-state findings feed ({len(finding_rows)} rows): {output_paths[0]}")
+    print(f"Wrote private latest-state scan coverage feed ({len(scan_rows)} endpoints): {output_paths[1]}")
     print("Client labels and telemetry are confidential; configure source permissions before connecting these files to a dashboard.")
     return 0
 

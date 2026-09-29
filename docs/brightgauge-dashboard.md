@@ -6,6 +6,18 @@ not evidence that a BrightGauge datasource has been connected. Keep source
 observations, manifests, normalized feeds, exports, and client names out of this
 public repository.
 
+The primary operational view is **present state**: findings from each
+endpoint's latest scan, alongside scan status and timestamp. The normalized
+CSV feeds select each endpoint's latest scan; a later scan with no findings replaces older findings.
+The private working archive supplies that latest-state selection and can be
+retained only as long as needed to refresh the dashboard and prepare the
+monthly report. Treat the finding-level BrightGauge view as present state, not
+historical observations.
+A monthly client report (optionally emailed as PDF) is the agreed human-readable
+history snapshot. Retaining the delivered report is sufficient for the current
+history requirement; a long-term machine-readable archive is optional unless
+later row-level recalculation or audit needs justify it.
+
 ## Audience and purpose
 
 The internal technician dashboard supports cross-client triage and monthly
@@ -23,27 +35,30 @@ the source history and should not be represented as deleted or verified safe.
 
 ## Page hierarchy
 
-1. **At-a-glance** — finding observations in the selected scope, distinct
-   pseudonymous finding keys, open-review observations, and scan runs split by
+1. **At-a-glance** — current findings in the selected scope, distinct
+   pseudonymous finding keys, open-review findings, and endpoint scan status split by
    complete / partial / no-observations.
-2. **Where the signals are** — observations by client, provider/product, and
+2. **Where the signals are** — findings by client, provider/product, and
    evidence category. Keep cross-client comparison visible in the default
    all-client view.
 3. **Review queue** — sortable finding-level table with client, collection
    time, provider/product, category, confidence, evidence level, and review
    state. Place the table beside the charts it explains.
-4. **Coverage and freshness** — scans over time by client and collection
-   status, including missing observations. Show the latest collection time;
+4. **Coverage and freshness** — endpoints by client and latest collection
+   status, including clients with no observations. Show the newest overall scan
+   and the oldest latest scan represented for each client, so aging coverage is
+   sortable without implying a verified fleet denominator;
    never infer fleet coverage without a separately verified device-inventory
    denominator.
 
 ## Filters and actions
 
-Provide page-wide filters for client, month, provider/product, finding type,
+Provide page-wide filters for client, provider/product, finding type,
 confidence, and review state, plus a text search over the fields exposed in the
-feed. Include a hide-reviewed control for acknowledged and justified findings.
-Every filter must apply consistently to headline values, charts, tables, and
-exports. A reset returns to all clients, all available months, and all review
+feed. For the current-state view, show the latest collection timestamp rather
+than a month selector. Include a hide-reviewed control for acknowledged and
+justified findings. Every filter must apply consistently to headline values,
+charts, tables, and exports. A reset returns to all clients and all review
 states.
 
 Customer export is disabled for the all-client view. Enable it only when exactly
@@ -63,31 +78,33 @@ See the [ConnectWise Client Reporting guide](https://docs.connectwise.com/Bright
 
 | Measure | Definition | Interpretation limit |
 | --- | --- | --- |
-| Finding observations | Count of rows in `shadow-ai-findings.csv` after filters; one row is one finding emitted by one observation | Repeated scans can count the same signal more than once; label as observations, not unique active findings |
+| Current findings | Count of finding rows in `shadow-ai-findings.csv` after filters; each row belongs to an endpoint's latest scan | Current detected signals in the latest known scan, not proof of account ownership, active use, or policy violation |
 | Distinct finding keys | Distinct `finding_key` values in the filtered rows | A stable, pseudonymous signal identity; not an endpoint count |
-| Open review | Rows whose `review_status` is `open` | Review backlog at observation grain, so repeated observations can recur |
-| Scan runs | Rows in `shadow-ai-scans.csv` with a collection timestamp | A run count, not device/fleet coverage |
+| Open review | Current finding rows whose `review_status` is `open` | Current review queue; older, superseded findings are not included |
+| Endpoints with scans | Rows in `shadow-ai-scans.csv` with a collection timestamp | Endpoints represented in the working archive, not verified fleet coverage |
 | Scan health | Counts by `scan_status` and `partial` | Missing, partial, or failed coverage is not a clean result |
-| Confidence / evidence mix | Finding observation counts by `confidence` and `evidence_level` | Collector evidence labels, not calibrated probability or severity |
+| Confidence / evidence mix | Current finding counts by `confidence` and `evidence_level` | Collector evidence labels, not calibrated probability or severity |
 
 Do not sum distinct finding keys across overlapping groupings, convert unknown
 or absent data into zero, or display a clean-client status when no observations
-were collected. Show the selected period and last data-refresh time with the
-dashboard.
+were collected. Show each endpoint's last collection time and the dashboard's
+last data-refresh time.
 
 ## Feed contract
 
 Create two separate datasets from the private CSV outputs:
 
-- `shadow-ai-findings.csv`: finding-observation grain. Use `client_id` as the
-  stable client dimension, `client_label` for display, `finding_key` for
+- `shadow-ai-findings.csv`: one row per finding in each endpoint's latest
+  scan. Use `client_id` as the stable client dimension, `client_label` for
+  display, `finding_key` for
   pseudonymous signal identity, and `finding_id` / `observation_id` for event
   lineage. Dimensions include provider, product, category, capability,
   confidence, evidence level, review state, browser, matched domain, and
   extension metadata.
-- `shadow-ai-scans.csv`: one row per scan, including explicit
-  `no_observations` rows. Use it only for collection cadence and health; do not
-  join it to findings in a way that multiplies finding rows.
+- `shadow-ai-scans.csv`: one row per endpoint's latest scan, including a scan
+  that emitted zero findings. For a client with no archived observations, emit
+  an explicit `no_observations` row. Use it only for collection cadence and
+  health; do not join it to findings in a way that multiplies finding rows.
 
 Keep these datasets separate because their grains differ. Client filters must
 bind to both feeds. Before adding charts, verify BrightGauge field types,
@@ -97,40 +114,86 @@ datasource or expand sharing as an incidental setup step.
 
 ### One-time pilot connection
 
-For a bounded pilot, use BrightGauge's direct CSV upload to create one dataset
-from each generated feed. The supported workflow is under **Data > Datasets**;
-the [ConnectWise Datasets guide](https://docs.connectwise.com/BrightGauge/090/005)
-covers CSV upload and custom-dataset creation. Review field types after upload:
-timestamps should be dates, `partial` should be a boolean, counts and evidence
-levels numeric, and IDs/statuses text. Keep the findings and scans datasets
-separate and use `client_id` for consistent client filtering. Before replacing
-a CSV, verify the upload's history/replace behavior and re-upload the complete
-accumulated feed, not only the newest scan. Do not upload observations or raw
+For a bounded pilot, use BrightGauge's **Upload CSV** workflow under
+**Data > Datasets** to create one dataset from each generated feed. This flow
+requires a connected Dropbox or OneDrive datasource and a CSV stored where that
+connection can access it; it is not a standalone upload from an arbitrary local
+file. The [ConnectWise Datasets guide](https://docs.connectwise.com/BrightGauge/090/005)
+and its [CSV dataset instructions](https://docs.connectwise.com/BrightGauge/Reports_and_Dashboards_%28formerly_BrightGauge%29_Documentation_Site_Map)
+describe the supported workflow. Verify that the tenant plan allows the required
+file datasource before planning the pilot around it. Review field types after
+dataset creation: timestamps should be dates, `partial` should be a boolean,
+counts and evidence levels numeric, and IDs/statuses text. Keep findings and
+scans separate and use `client_id` for consistent client filtering. Each
+refresh must replace the feed with the complete latest-state view for all
+mapped clients; uploading only the newest run would make unscanned endpoints
+disappear. Do not load raw observations or raw
 RMM `execution_output` directly.
 
-The direct upload is suitable for initial dashboard wiring and a small pilot;
-it is not itself a recurring refresh mechanism. For scheduled refresh, choose a
-dedicated restricted file location and confirm the BrightGauge connector's
-folder scope, refresh timing, file replacement behavior, and retention before
-authorizing it.
+The initial CSV workflow is not itself a recurring refresh mechanism. For
+scheduled refresh, use a dedicated restricted file location and confirm the
+BrightGauge connector's folder scope, refresh timing, file replacement
+behavior, and retention before authorizing it.
+
+Do not treat BrightGauge's GitHub datasource as a replacement CSV-ingestion
+path. Its documented datasets cover GitHub repository activity (pull requests,
+repositories, events, issues, and branches), not arbitrary CSV or JSON files
+stored in a repository. A private GitHub repo may be used as a controlled code
+source, but it does not by itself make scanner output a BrightGauge dataset.
+See [BrightGauge's GitHub integration guide](https://support.brightgauge.com/hc/en-us/articles/360000857492-Connecting-to-GitHub).
+
+If the account plan blocks adding the required OneDrive or Dropbox datasource,
+do not delete or replace the existing RMM datasource to make room. Use the
+private technician HTML builder from a task-scoped RMM export as the interim
+finding-level view. The existing RMM Custom Endpoint Fields dataset can support
+latest-state scalar summaries after scanner fields are configured. ConnectWise
+documents this dataset as refreshing hourly and showing the latest custom-field
+values. Treat it as a **current-state summary path**, not a finding-level data
+store: it cannot replace the complete finding table, evidence detail, filters,
+or selected-client exports defined above. Before relying on it, prove that the
+RMM Script Editor can write the intended endpoint fields from the scanner's
+output and verify values on one authorized pilot endpoint. Store only concise,
+non-sensitive summaries there; never copy raw JSON, local usernames, browser
+history, or full extension/domain evidence into endpoint custom fields.
+
+The RMM Automation Details dataset is a separate short-window source for task
+output; it must be filtered to the exact scanner task and its retention must be
+verified before it is used for collection. The internal technician HTML view
+remains the supported finding-level interim path when no restricted CSV
+datasource is available.
 
 ## Refresh workflow
 
-The collectors create schema-validated JSON observations. The private ingestion
-workflow appends immutable observations to isolated per-client archives, then
-rebuilds both CSVs from accumulated history. Do not replace the archive with
-only the latest sync window. The default proposal is three scans per month and a
-monthly report after the final scan; this is not an active schedule. Confirm
-retention, timezone, failure handling, and client-specific authorization before
-automation.
+**Priority 1 is present state:** refresh the internal view as soon as a new
+validated RMM scan output is available, and show each endpoint's latest scan
+with its timestamp and status. The RMM Automation Details dataset is currently
+only a short-window extraction source (daily sync, latest two days), so the
+collection/refresh path must run often enough not to miss task output. Do not
+delay the operational view until month end.
+
+**Priority 2 is history:** generate a client-scoped monthly report from the
+observations collected during that month and retain the delivered email/PDF as
+the human-readable snapshot. A separate long-term scan-history database is not
+required for the first version. Keep only the restricted working data needed
+to produce the current view and monthly report, subject to an approved
+retention/deletion schedule.
+
+The collectors create schema-validated JSON observations. A restricted
+per-client working archive supplies each endpoint's latest scan until the
+dashboard refresh and monthly report build complete. Long-term machine-readable
+retention is not required for the current history requirement: a delivered
+client report (optionally a PDF attachment) can serve as the retained snapshot.
+The default proposal is three scans per month and a monthly report after the final scan;
+this is not an active schedule. Confirm recipients, timezone, failure
+handling, and client-specific authorization before automation.
 
 Current implementation boundary: the repository can import a task-scoped RMM
-export, validate it, build the two normalized CSV feeds, and create a private
-interactive HTML dashboard. BrightGauge supports CSV datasets through direct
-upload and cloud-file integrations, depending on the account and workflow. Use
+export, validate it, build the two latest-state CSV feeds, and create a private
+interactive HTML dashboard. BrightGauge supports CSV datasets through a
+connected cloud-file integration, depending on the account and workflow. Use
 an approved, restricted folder for any connected storage source; do not point
-it at a broad shared library. Verify field types, replace/refresh behavior, and
-history retention before relying on a dataset. The existing RMM automation
+it at a broad shared library. Verify field types, replacement/refresh behavior,
+and client mapping before relying on a dataset. The existing RMM automation
 dataset contains task-run metadata and raw execution output; run counts alone
 cannot power the finding-level measures above. Do not claim the live board is
 finding-complete until the two feeds are connected and the rendered filters,

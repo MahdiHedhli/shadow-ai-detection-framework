@@ -13,6 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "tests"))
 import refresh_dashboard
+import refresh_dashboard_from_rmm_export
+import discover_rmm_clients
 from test_report import observation
 
 
@@ -20,6 +22,125 @@ TASK = "Shadow AI Inventory - Windows"
 
 
 class RefreshDashboardTests(unittest.TestCase):
+    def test_first_run_discovery_feeds_latest_state_dashboard_end_to_end(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            export = root / "broad-export.csv"
+            document = observation("PRIVATE-PILOT-HOST", "anthropic", "browser_extension", {
+                "extension_name": "Claude",
+                "extension_id": "private-test-id",
+            })
+            with export.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=["company_unique_id", "company_name", "task_name", "execution_output", "other"],
+                )
+                writer.writeheader()
+                writer.writerow({
+                    "company_unique_id": "unrelated-company",
+                    "company_name": "Unrelated Client",
+                    "task_name": "Other automation",
+                    "execution_output": "UNRELATED_SECRET_DO_NOT_COPY",
+                    "other": "private",
+                })
+                writer.writerow({
+                    "company_unique_id": "company-001",
+                    "company_name": "Pilot Client",
+                    "task_name": TASK,
+                    "execution_output": json.dumps(document),
+                    "other": "not-copied",
+                })
+            source_before = export.read_bytes()
+            manifest = root / "dashboard-clients.json"
+            self.assertEqual(discover_rmm_clients.write_manifest(export, TASK, manifest), 1)
+
+            staging = root / "staging"
+            staging.mkdir(mode=0o700)
+            feeds = root / "feeds"
+            feeds.mkdir(mode=0o700)
+            html = root / "html"
+            html.mkdir(mode=0o700)
+            result = refresh_dashboard_from_rmm_export.refresh_from_export(
+                export,
+                manifest,
+                TASK,
+                staging,
+                feeds,
+                html / "internal.html",
+            )
+
+            added, already_present, finding_count, scan_count, findings, scans, dashboard, filtered, unrelated = result
+            self.assertEqual((added, already_present, finding_count, scan_count, filtered, unrelated), (1, 0, 1, 1, 1, 1))
+            self.assertTrue(findings.exists())
+            self.assertTrue(scans.exists())
+            self.assertIn("Pilot Client", dashboard.read_text(encoding="utf-8"))
+            self.assertNotIn("PRIVATE-PILOT-HOST", dashboard.read_text(encoding="utf-8"))
+            self.assertNotIn("UNRELATED_SECRET_DO_NOT_COPY", findings.read_text(encoding="utf-8"))
+            self.assertEqual(export.read_bytes(), source_before)
+            self.assertEqual(list(staging.iterdir()), [])
+
+    def test_one_command_refresh_filters_broad_source_and_removes_transient_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest = root / "clients.json"
+            manifest.write_text(json.dumps({
+                "schema_version": "1.0",
+                "clients": [{
+                    "client_id": "client-a",
+                    "client_label": "Client A",
+                    "rmm_company_unique_id": "company-001",
+                    "observations": "client-a/observations",
+                }],
+            }), encoding="utf-8")
+            document = observation("PRIVATE-TEST-HOST", "anthropic", "browser_extension", {"extension_name": "Claude"})
+            export = root / "broad-export.csv"
+            with export.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=["company_unique_id", "task_name", "execution_output", "other"],
+                )
+                writer.writeheader()
+                writer.writerow({
+                    "company_unique_id": "unmapped-private-company",
+                    "task_name": "Unrelated task",
+                    "execution_output": "UNRELATED_PRIVATE_OUTPUT_DO_NOT_COPY",
+                    "other": "sensitive",
+                })
+                writer.writerow({
+                    "company_unique_id": "company-001",
+                    "task_name": TASK,
+                    "execution_output": json.dumps(document),
+                    "other": "not-copied",
+                })
+            source_before = export.read_bytes()
+            staging = root / "staging"
+            staging.mkdir(mode=0o700)
+            feeds = root / "feeds"
+            feeds.mkdir(mode=0o700)
+            html_dir = root / "html"
+            html_dir.mkdir(mode=0o700)
+
+            result = refresh_dashboard_from_rmm_export.refresh_from_export(
+                export,
+                manifest,
+                TASK,
+                staging,
+                feeds,
+                html_dir / "dashboard.html",
+            )
+
+            added, skipped, finding_count, scan_count, findings, scans, dashboard, filtered, unrelated = result
+            self.assertEqual((added, skipped, finding_count, scan_count, filtered, unrelated), (1, 0, 1, 1, 1, 1))
+            self.assertTrue(findings.exists())
+            self.assertTrue(scans.exists())
+            self.assertTrue(dashboard.exists())
+            self.assertEqual(export.read_bytes(), source_before)
+            self.assertEqual(list(staging.iterdir()), [])
+            for path in (findings, scans, dashboard):
+                content = path.read_text(encoding="utf-8")
+                self.assertNotIn("UNRELATED_PRIVATE_OUTPUT_DO_NOT_COPY", content)
+                self.assertNotIn("PRIVATE-TEST-HOST", content)
+
     def test_refresh_archives_and_builds_both_feeds_and_private_dashboard(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

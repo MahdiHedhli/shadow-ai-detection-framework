@@ -55,6 +55,33 @@ class InternalDashboardTests(unittest.TestCase):
         self.assertNotIn("PRIVATE-HOST-", page)
         self.assertNotIn("local-test-user", page)
         self.assertIn('r.client_id!==client', page)
+        self.assertIn("latest scan per endpoint", page)
+        self.assertTrue(all("_endpoint_key" not in row and "_observation_id" not in row for row in payload["scans"]))
+
+    def test_payload_uses_only_latest_scan_per_endpoint_without_backfilling_partial(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest = self.make_private_inputs(root)
+            latest = observation(
+                "PRIVATE-HOST-client-a",
+                "openai",
+                "browser_history",
+                {"matched_domain": "chatgpt.com", "browser": "chrome"},
+            )
+            latest["collected_at"] = "2026-09-29T12:00:00.000Z"
+            latest["findings"][0]["observed_at"] = latest["collected_at"]
+            latest["collector"]["partial"] = True
+            (root / "client-a" / "observations" / "latest.json").write_text(json.dumps(latest), encoding="utf-8")
+
+            payload = dashboard.build_payload(manifest, None)
+
+        client_a_findings = [row for row in payload["findings"] if row["client_id"] == "client-a"]
+        client_a_scans = [row for row in payload["scans"] if row["client_id"] == "client-a"]
+        self.assertEqual(len(client_a_findings), 1)
+        self.assertEqual(client_a_findings[0]["provider_id"], "openai")
+        self.assertEqual(len(client_a_scans), 1)
+        self.assertEqual(client_a_scans[0]["scan_status"], "partial")
+        self.assertNotIn("PRIVATE-HOST-client-a", dashboard.make_html(payload))
 
     def test_customer_export_requires_one_client_and_exports_filtered_client_rows(self) -> None:
         html = dashboard.DASHBOARD_HTML
@@ -69,18 +96,46 @@ class InternalDashboardTests(unittest.TestCase):
         self.assertNotIn('"reviewer"', html)
         self.assertNotIn('"reason"', html)
 
-    def test_no_observation_status_is_scoped_to_requested_period(self) -> None:
+    def test_current_state_shows_newest_scan_time_in_selected_scope(self) -> None:
+        html = dashboard.DASHBOARD_HTML
+        self.assertIn('id="kLastScan"', html)
+        self.assertIn('id="kLastScanSub"', html)
+        self.assertIn(
+            'const newest=scans.filter(s=>s.collected_at&&Number.isFinite(Date.parse(s.collected_at)))',
+            html,
+        )
+        self.assertIn('timeZone:"UTC"', html)
+        self.assertIn('No scan timestamp is available in this scope', html)
+
+    def test_client_comparison_can_sort_by_oldest_latest_endpoint_scan(self) -> None:
+        html = dashboard.DASHBOARD_HTML
+        self.assertIn('data-client-sort="oldest_latest_scan_at"', html)
+        self.assertIn('Oldest latest scan (UTC)', html)
+        self.assertIn('const x=a[clientSort.key],y=b[clientSort.key];let cmp;', html)
+        self.assertIn('if(!x||!y)return x? -1:y?1:a.client_label.localeCompare(b.client_label)', html)
+        self.assertIn('cmp=Date.parse(x)-Date.parse(y)', html)
+        self.assertIn('"No scan timestamp"', html)
+
+    def test_numeric_finding_columns_sort_by_value_not_lexical_order(self) -> None:
+        html = dashboard.DASHBOARD_HTML
+        self.assertIn(
+            'if(key==="confidence_rank"||key==="evidence_level")return Number(row[key]||0);',
+            html,
+        )
+        self.assertNotIn('||key==="evidence_level")return String(row[key]', html)
+
+    def test_no_observation_status_remains_explicit_for_empty_client_archive(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             manifest = self.make_private_inputs(root)
             (root / "client-b" / "observations" / "scan.json").unlink()
             payload = dashboard.build_payload(manifest, "2026-09")
 
-        self.assertIn("2026-09", payload["months"])
         missing = next(row for row in payload["scans"] if row["client_id"] == "client-b")
         self.assertEqual(missing["scan_status"], "no_observations")
         self.assertEqual(missing["period"], "2026-09")
-        self.assertIn('String(r.collected_at||r.period||"").startsWith(period)', dashboard.DASHBOARD_HTML)
+        self.assertIn('function filteredScans(){const client=$("client").value;', dashboard.DASHBOARD_HTML)
+        self.assertNotIn('id="period"', dashboard.DASHBOARD_HTML)
 
     def test_payload_is_script_safe_and_offline_only(self) -> None:
         payload = {"clients": [], "findings": [{"client_label": "</script><script>alert(1)</script>"}], "scans": []}
