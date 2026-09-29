@@ -108,9 +108,11 @@ def read_export(path: Path, task_name: str, clients_by_company: dict[str, dict[s
 
 
 def store_observation(archive: Path, document: dict[str, Any]) -> bool:
-    archive.mkdir(parents=True, exist_ok=True, mode=0o700)
-    if os.name == "posix" and archive.stat().st_mode & 0o077:
-        raise ImportError("each observation archive must not grant group or other access (expected mode 0700 or stricter)")
+    try:
+        build_dashboard_feed.ensure_private_directory(archive.parent, "observation archive parent")
+        build_dashboard_feed.ensure_private_directory(archive, "observation archive")
+    except build_dashboard_feed.FeedError as exc:
+        raise ImportError(f"could not prepare private observation archive: {exc}") from exc
     destination = archive / f"{document['observation_id']}.json"
     serialized = json.dumps(document, ensure_ascii=False, indent=2) + "\n"
     if destination.exists():

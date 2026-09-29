@@ -86,12 +86,7 @@ def build_payload(manifest_path: Path, period: str | None, import_note: str | No
 
 def write_dashboard(path: Path, content: str, overwrite: bool) -> Path:
     path = build_dashboard_feed.outside_public_repo(path, "dashboard output")
-    parent = path.parent
-    parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    if os.name == "posix" and parent.stat().st_mode & 0o077:
-        raise build_dashboard_feed.FeedError(
-            "dashboard output directory must not grant group or other access (expected mode 0700 or stricter)"
-        )
+    parent = build_dashboard_feed.ensure_private_directory(path.parent, "dashboard output directory")
     if path.exists() and not overwrite:
         raise build_dashboard_feed.FeedError(
             "dashboard output already exists; pass --overwrite only when replacing it is intended"

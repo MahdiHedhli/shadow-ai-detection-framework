@@ -90,9 +90,7 @@ def write_manifest(input_path: Path, task_name: str, output_path: Path) -> int:
     clients = discover_clients(input_path, task_name)
     payload = json.dumps({"schema_version": "1.0", "clients": clients}, ensure_ascii=False, indent=2) + "\n"
     try:
-        destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        if os.name == "posix" and destination.parent.stat().st_mode & 0o077:
-            raise DiscoveryError("manifest directory must not grant group or other access (expected mode 0700 or stricter)")
+        build_dashboard_feed.ensure_private_directory(destination.parent, "manifest directory")
         descriptor, temporary = tempfile.mkstemp(prefix=".shadow-ai-manifest-", suffix=".tmp", dir=destination.parent)
         temporary_path = Path(temporary)
         try:

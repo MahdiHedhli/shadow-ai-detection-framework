@@ -107,9 +107,7 @@ def filter_export(
         raise FilterError("source export exceeds the 512 MiB safety limit")
 
     try:
-        destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        if os.name == "posix" and destination.parent.stat().st_mode & 0o077:
-            raise FilterError("staging directory must not grant group or other access (expected mode 0700 or stricter)")
+        build_dashboard_feed.ensure_private_directory(destination.parent, "staging directory")
     except OSError as exc:
         raise FilterError(f"could not prepare private staging directory: {exc}") from exc
 

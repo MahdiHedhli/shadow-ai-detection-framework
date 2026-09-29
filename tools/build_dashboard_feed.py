@@ -75,6 +75,41 @@ def outside_public_repo(path: Path, what: str) -> Path:
     raise FeedError(f"{what} must be outside the public repository")
 
 
+def ensure_private_directory(path: Path, what: str) -> Path:
+    """Create a private directory chain without permissive intermediate dirs."""
+    directory = outside_public_repo(path, what)
+    if directory.is_symlink():
+        raise FeedError(f"{what} must not be a symbolic link")
+    missing: list[Path] = []
+    current = directory
+    while not current.exists():
+        if current.is_symlink():
+            raise FeedError(f"{what} path contains a symbolic link")
+        missing.append(current)
+        if current.parent == current:
+            raise FeedError(f"could not find an existing parent for {what}")
+        current = current.parent
+    if current.is_symlink() or not current.is_dir():
+        raise FeedError(f"{what} parent must be a directory and not a symbolic link")
+    if os.name == "posix" and current.stat().st_mode & 0o077:
+        raise FeedError(f"existing parent of {what} must not grant group or other access")
+
+    for candidate in reversed(missing):
+        try:
+            candidate.mkdir(mode=0o700)
+        except FileExistsError:
+            if candidate.is_symlink() or not candidate.is_dir():
+                raise FeedError(f"{what} path was replaced by a non-directory")
+        if candidate.is_symlink():
+            raise FeedError(f"{what} path contains a symbolic link")
+        if os.name == "posix" and candidate.stat().st_mode & 0o077:
+            raise FeedError(f"{what} directories must not grant group or other access")
+
+    if os.name == "posix" and directory.stat().st_mode & 0o077:
+        raise FeedError(f"{what} directory must not grant group or other access (expected mode 0700 or stricter)")
+    return directory
+
+
 def load_manifest(path: Path) -> list[dict[str, Any]]:
     path = outside_public_repo(path, "client manifest")
     try:
@@ -313,10 +348,7 @@ def make_csv(rows: list[dict[str, Any]], fields: list[str]) -> str:
 
 
 def write_outputs(output_dir: Path, findings_csv: str, scans_csv: str, overwrite: bool) -> tuple[Path, Path]:
-    output_dir = outside_public_repo(output_dir, "dashboard output directory")
-    output_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-    if os.name == "posix" and output_dir.stat().st_mode & 0o077:
-        raise FeedError("dashboard output directory must not grant group or other access (expected mode 0700 or stricter)")
+    output_dir = ensure_private_directory(output_dir, "dashboard output directory")
     paths = (output_dir / "shadow-ai-findings.csv", output_dir / "shadow-ai-scans.csv")
     if not overwrite and any(path.exists() for path in paths):
         raise FeedError("dashboard feed files already exist; pass --overwrite only when replacing the private feed is intended")

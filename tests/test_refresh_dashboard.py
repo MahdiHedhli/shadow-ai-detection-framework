@@ -206,7 +206,7 @@ class RefreshDashboardTests(unittest.TestCase):
             if os.name == "posix":
                 for path in (findings_path, scans_path, dashboard_path):
                     self.assertEqual(path.stat().st_mode & 0o777, 0o600)
-                for directory in (feeds_dir, html_dir, root / "client-a/observations"):
+                for directory in (feeds_dir, html_dir, root / "client-a", root / "client-a/observations"):
                     self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
 
     def test_refresh_refuses_overwrite_without_explicit_flag(self) -> None:

@@ -24,6 +24,26 @@ class DashboardFeedTests(unittest.TestCase):
         with self.assertRaises(feed.FeedError):
             feed.outside_public_repo(ROOT / "private-client-data" / "manifest.json", "client manifest")
 
+    def test_private_directory_creation_secures_every_new_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            destination = root / "private" / "archives" / "client-a"
+            self.assertEqual(feed.ensure_private_directory(destination, "archive"), destination.resolve())
+            if sys.platform != "win32":
+                for directory in (root / "private", root / "private/archives", destination):
+                    self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+
+    def test_private_directory_creation_rejects_permissive_existing_parent(self) -> None:
+        if sys.platform == "win32":
+            self.skipTest("POSIX directory permissions are unavailable")
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary) / "shared"
+            parent.mkdir(mode=0o755)
+            parent.chmod(0o755)
+            with self.assertRaisesRegex(feed.FeedError, "existing parent"):
+                feed.ensure_private_directory(parent / "private", "private output")
+            self.assertFalse((parent / "private").exists())
+
     def test_manifest_rejects_overlapping_client_archives(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)

@@ -37,11 +37,7 @@ def refresh_from_export(
     """Filter, validate, import, and rebuild using one restricted transient copy."""
     staging_dir = build_dashboard_feed.outside_public_repo(staging_dir, "temporary staging directory")
     try:
-        staging_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        if os.name == "posix" and staging_dir.stat().st_mode & 0o077:
-            raise build_dashboard_feed.FeedError(
-                "temporary staging directory must not grant group or other access (expected mode 0700 or stricter)"
-            )
+        staging_dir = build_dashboard_feed.ensure_private_directory(staging_dir, "temporary staging directory")
     except OSError as exc:
         raise build_dashboard_feed.FeedError(f"could not prepare private temporary staging: {exc}") from exc
 
