@@ -9,6 +9,8 @@ titles, environment values, prompts, responses, or configuration contents.
 from __future__ import annotations
 
 import argparse
+import base64
+import gzip
 import json
 import os
 import platform
@@ -25,7 +27,7 @@ from urllib.parse import urlsplit
 
 
 COLLECTOR_NAME = "shadow-ai-rmm-macos-linux"
-COLLECTOR_VERSION = "0.6.4"
+COLLECTOR_VERSION = "0.6.5"
 MAX_FINDINGS = 5000
 MAX_HOMES = 256
 MAX_PROCESS_BYTES = 65536
@@ -33,6 +35,8 @@ MAX_HISTORY_BYTES_PER_PROFILE = 268435456
 MAX_HISTORY_ROWS_PER_PROFILE = 1000000
 MAX_MANIFEST_BYTES = 1048576
 MAX_BROWSER_PREFERENCE_BYTES = 16777216
+RMM_COMPRESS_THRESHOLD_BYTES = 12000
+RMM_MAX_TRANSPORT_CHARS = 24000
 EXTENSION_ID_RE = re.compile(r"^[a-p]{32}$")
 CATALOG = {{ENDPOINT_CATALOG_JSON}}
 BROWSER_EXTENSION_CATALOG = {{BROWSER_EXTENSION_CATALOG_JSON}}
@@ -839,6 +843,17 @@ def collect_browser_history(document: dict[str, object], homes: list[tuple[str, 
             record_error(document, "browser_history_firefox", exc)
 
 
+def rmm_transport_output(document: dict[str, object]) -> str:
+    """Keep large JSON observations below common RMM export cell limits."""
+    raw = json.dumps(document, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    if len(raw) <= RMM_COMPRESS_THRESHOLD_BYTES:
+        return raw.decode("utf-8")
+    encoded = "SHADOWAI_GZIP_V1:" + base64.b64encode(gzip.compress(raw, compresslevel=9, mtime=0)).decode("ascii")
+    if len(encoded) > RMM_MAX_TRANSPORT_CHARS:
+        raise RuntimeError("rmm_output_size_limit")
+    return encoded
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--self-test", action="store_true", help="emit an empty conformant document without scanning")
@@ -853,7 +868,7 @@ def main() -> int:
             collect_known_paths(document, homes)
             collect_browser_extensions(document, homes)
             collect_browser_history(document, homes)
-    print(json.dumps(document, separators=(",", ":"), sort_keys=True))
+    print(rmm_transport_output(document))
     collector = document["collector"]
     assert isinstance(collector, dict)
     return 2 if collector["partial"] else 0

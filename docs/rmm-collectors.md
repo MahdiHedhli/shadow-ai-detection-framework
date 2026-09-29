@@ -68,6 +68,8 @@ For an authorized macOS pilot in ConnectWise RMM's **Bash Script** editor, paste
 
 The RMM task output is the handoff into reporting: retain the JSON as task output, export only that scanner task, then process it through the private importer/refresh command in [Monthly collection and reporting](monthly-reporting.md#rmm-task-export-ingestion). Give it a distinct name where the RMM allows. If the RMM emits a generic task label, scope the export to only the scanner's executions before download; the importer requires an exact `task_name` and intentionally rejects mixed-task exports rather than silently combining unrelated output.
 
+To protect against BrightGauge's 30,000-character output-cell limit, current collectors emit ordinary schema JSON through 12,000 UTF-8 bytes and a `SHADOWAI_GZIP_V1:` base64/gzip envelope above that size. The private importer validates envelope length, bounded decompressed size, gzip framing, UTF-8, and then the normal observation schema; it archives only the decoded observation JSON. A compressed payload that still exceeds 24,000 characters fails visibly instead of being clipped. Existing RMM tasks must be updated with the newly built collector artifacts before this protection applies; already-truncated historical rows still need a fresh execution.
+
 ### BrightGauge latest-state summary via endpoint custom fields
 
 ConnectWise RMM's Script Editor can map a script step's `%output%` to an

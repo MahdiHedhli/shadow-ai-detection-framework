@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 
 
@@ -14,6 +15,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "tests"))
 import filter_rmm_task_export as task_filter
 import build_dashboard_feed
+import rmm_output
 from test_report import observation
 
 
@@ -127,6 +129,32 @@ class FilterRmmExportTests(unittest.TestCase):
 
         self.assertEqual(parsed, document)
         self.assertEqual(parsed["findings"][0]["attributes"]["extension_name"], "Claude; Desktop")
+
+    def test_filters_large_compressed_observation_and_writes_validated_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "broad.csv"
+            output = root / "private" / "shadow-ai.csv"
+            document = observation("HOST-A", "anthropic", "browser_extension", {"extension_name": "Claude"})
+            template = document["findings"][0]
+            document["findings"] = []
+            for _ in range(80):
+                finding = json.loads(json.dumps(template))
+                finding["finding_id"] = str(uuid.uuid4())
+                document["findings"].append(finding)
+            compressed = rmm_output.encode_output(json.dumps(document, separators=(",", ":")))
+            self.write_export(source, [{
+                "company_unique_id": "company-001",
+                "task_name": TASK,
+                "execution_output": compressed,
+                "unrelated_column": "must-not-copy",
+            }])
+
+            self.assertEqual(task_filter.filter_export(source, self.make_manifest(root), TASK, output), (1, 0, 0))
+            with output.open("r", encoding="utf-8", newline="") as handle:
+                row = next(csv.DictReader(handle))
+            self.assertFalse(row["execution_output"].startswith(rmm_output.PREFIX))
+            self.assertEqual(json.loads(row["execution_output"]), document)
 
     def test_can_exclude_only_exact_limit_malformed_output_and_reports_incompleteness(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

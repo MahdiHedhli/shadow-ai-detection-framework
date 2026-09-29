@@ -22,7 +22,7 @@ param([switch]$SelfTest)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $CollectorName = 'shadow-ai-rmm-windows'
-$CollectorVersion = '0.6.5'
+$CollectorVersion = '0.6.6'
 $MaxFindings = 5000
 $ExtensionIdPattern = '^[a-p]{32}$'
 $CatalogJson = @'
@@ -737,6 +737,31 @@ function ConvertFrom-EmbeddedJsonArray {
     $parsed = ConvertFrom-Json -InputObject $Json -ErrorAction Stop
     if ($null -eq $parsed) { return @() }
     return @($parsed | ForEach-Object { $_ })
+}
+
+function ConvertTo-RmmTransportOutput {
+    param([Parameter(Mandatory = $true)][string]$Json)
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Json)
+    if ($bytes.Length -le 12000) { return $Json }
+
+    $output = [System.IO.MemoryStream]::new()
+    $gzip = [System.IO.Compression.GZipStream]::new(
+        $output,
+        [System.IO.Compression.CompressionMode]::Compress,
+        $true
+    )
+    try {
+        $gzip.Write($bytes, 0, $bytes.Length)
+    } finally {
+        $gzip.Dispose()
+    }
+    try {
+        $encoded = 'SHADOWAI_GZIP_V1:' + [System.Convert]::ToBase64String($output.ToArray())
+    } finally {
+        $output.Dispose()
+    }
+    if ($encoded.Length -gt 24000) { throw [System.IO.InvalidDataException]::new('rmm_output_size_limit') }
+    return $encoded
 }
 
 function Assert-EmbeddedCatalogHealth {
@@ -1734,7 +1759,8 @@ try {
         Collect-BrowserExtensions -Profiles $profiles
         Collect-BrowserHistory -Profiles $profiles
     }
-    $Document | ConvertTo-Json -Depth 8 -Compress
+    $json = $Document | ConvertTo-Json -Depth 8 -Compress
+    ConvertTo-RmmTransportOutput -Json $json
     if ($Document.collector.partial) { exit 2 }
     exit 0
 } catch {

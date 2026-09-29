@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,6 +18,8 @@ assert BUNDLE_SPEC and BUNDLE_SPEC.loader
 bundle_builder = importlib.util.module_from_spec(BUNDLE_SPEC)
 BUNDLE_SPEC.loader.exec_module(bundle_builder)
 VALIDATOR = ROOT / "tools" / "validate_observation.py"
+sys.path.insert(0, str(ROOT / "tools"))
+import rmm_output
 
 
 class MacOSPerlCollectorTests(unittest.TestCase):
@@ -51,6 +54,26 @@ class MacOSPerlCollectorTests(unittest.TestCase):
             timeout=10,
         )
         self.assertIn("syntax OK", result.stderr)
+
+    @unittest.skipUnless(shutil.which("perl"), "Perl is unavailable")
+    def test_large_perl_output_uses_bounded_gzip_envelope(self) -> None:
+        source = COLLECTOR.read_text(encoding="utf-8")
+        target = "$doc->{collector}->{partial} = $partial;\n"
+        self.assertIn(target, source)
+        source = source.replace(target, target + "$doc->{device}->{os_version} = 'x' x 20000;\n", 1)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "large-self-test.pl"
+            path.write_text(source, encoding="utf-8")
+            result = subprocess.run(
+                ["perl", str(path), "--self-test"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        self.assertTrue(result.stdout.startswith(rmm_output.PREFIX))
+        document = json.loads(rmm_output.decode_output(result.stdout.strip()))
+        self.assertEqual(document["device"]["os_version"], "x" * 20000)
 
     @unittest.skipUnless(shutil.which("bash") and shutil.which("perl"), "Bash or Perl is unavailable")
     def test_rmm_bash_bundle_emits_valid_self_test_observation(self) -> None:

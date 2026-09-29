@@ -6,12 +6,19 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
+sys.path.insert(0, str(ROOT / "tests"))
+import rmm_output
+from test_report import observation as synthetic_observation
+
+
 BUILD_PATH = ROOT / "tools" / "build.py"
 SPEC = importlib.util.spec_from_file_location("shadow_ai_build", BUILD_PATH)
 assert SPEC and SPEC.loader
@@ -124,6 +131,19 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(document["findings"], [])
         self.assertFalse(document["collector"]["partial"])
 
+    def test_python_collector_compresses_only_large_rmm_output(self) -> None:
+        collector_path = ROOT / "dist" / "rmm-macos-linux" / "shadow_ai_inventory.py"
+        spec = importlib.util.spec_from_file_location("shadow_ai_collector_transport_test", collector_path)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        collector = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(collector)
+        document = synthetic_observation("TEST-ENDPOINT", "anthropic", "browser_extension", {"extension_name": "Claude"})
+        document["device"]["os_version"] = "x" * 20000
+        output = collector.rmm_transport_output(document)
+        self.assertTrue(output.startswith(rmm_output.PREFIX))
+        self.assertEqual(json.loads(rmm_output.decode_output(output)), document)
+
     @unittest.skipUnless(shutil.which("pwsh"), "PowerShell is not installed")
     def test_powershell_collector_self_test(self) -> None:
         collector = ROOT / "dist" / "rmm-windows" / "ShadowAIInventory.ps1"
@@ -138,6 +158,31 @@ class RepositoryTests(unittest.TestCase):
         observation.validate_document(document)
         self.assertEqual(document["findings"], [])
         self.assertFalse(document["collector"]["partial"])
+
+    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell is not installed")
+    def test_powershell_collector_compresses_large_rmm_output(self) -> None:
+        collector = ROOT / "dist" / "rmm-windows" / "ShadowAIInventory.ps1"
+        source = collector.read_text(encoding="utf-8")
+        target = "$json = $Document | ConvertTo-Json -Depth 8 -Compress\n"
+        self.assertIn(target, source)
+        source = source.replace(
+            target,
+            "$Document.device['os_version'] = ('x' * 20000)\n" + target,
+            1,
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            test_script = Path(temp_dir) / "large-self-test.ps1"
+            test_script.write_text(source, encoding="utf-8")
+            result = subprocess.run(
+                ["pwsh", "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(test_script), "-SelfTest"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        self.assertTrue(result.stdout.startswith(rmm_output.PREFIX))
+        document = json.loads(rmm_output.decode_output(result.stdout.strip()))
+        self.assertEqual(document["device"]["os_version"], "x" * 20000)
 
     def test_windows_embedded_catalogs_are_flattened_and_health_checked(self) -> None:
         paths = [

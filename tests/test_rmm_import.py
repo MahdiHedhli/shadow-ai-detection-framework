@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 
 
@@ -14,6 +15,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "tests"))
 import import_rmm_task_export as importer
 from test_report import observation
+import rmm_output
 
 
 TASK = "Shadow AI Inventory - Windows"
@@ -71,6 +73,36 @@ class RmmImportTests(unittest.TestCase):
             if os.name == "posix":
                 self.assertEqual(first.stat().st_mode & 0o777, 0o600)
                 self.assertEqual(first.parent.stat().st_mode & 0o777, 0o700)
+
+    def test_import_decodes_large_transport_and_archives_plain_validated_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest = self.make_manifest(root)
+            export = root / "automation.csv"
+            document = observation("PRIVATE-HOST", "anthropic", "browser_extension", {"extension_name": "Claude"})
+            template = document["findings"][0]
+            document["findings"] = []
+            for _ in range(80):
+                finding = json.loads(json.dumps(template))
+                finding["finding_id"] = str(uuid.uuid4())
+                document["findings"].append(finding)
+            plain = json.dumps(document, separators=(",", ":"))
+            compressed = rmm_output.encode_output(plain)
+            self.assertGreater(len(plain), rmm_output.COMPRESS_THRESHOLD_BYTES)
+            self.assertLess(len(compressed), 30_000)
+            self.assertTrue(compressed.startswith(rmm_output.PREFIX))
+            self.make_csv(export, [{
+                "company_unique_id": "company-001",
+                "task_name": TASK,
+                "execution_output": compressed,
+            }])
+
+            self.assertEqual(importer.import_export(export, manifest, TASK), (1, 0))
+            archived = root / "client-a/observations" / f"{document['observation_id']}.json"
+            stored = json.loads(archived.read_text(encoding="utf-8"))
+            self.assertEqual(stored, document)
+            self.assertEqual(len(stored["findings"]), 80)
+            self.assertFalse(archived.read_text(encoding="utf-8").startswith(rmm_output.PREFIX))
 
     def test_rejects_unrelated_tasks_unmapped_companies_and_bad_json_before_writing(self) -> None:
         cases = [

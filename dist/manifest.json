@@ -55,19 +55,19 @@
     },
     {
       "path": "rmm-macos-linux/shadow_ai_inventory.pl",
-      "sha256": "afab8f942c9f7134090cc8f0c58d6d2ce9d61703eaad2c10cd30fbbf27b211cc"
+      "sha256": "0eec62618abf24000f44c26fbee641b30c4708249f0fd3f836b61d869d537cdb"
     },
     {
       "path": "rmm-macos-linux/shadow_ai_inventory.py",
-      "sha256": "aec53cda1e0f15d5aabc66d4fa685ffbca27293d3aef49b0db06e21a0c39f873"
+      "sha256": "c963ce977a3d746e2d21323cd6a8a66d759312ce8d9b3fb45172366c3b2f0140"
     },
     {
       "path": "rmm-macos-linux/shadow_ai_inventory_rmm.sh",
-      "sha256": "c97e23b8a8e5e412cbf39400485ce6ae58b02572fefe3c8ed10bfac75c8d6afc"
+      "sha256": "fbdbc56d17a73765d35ceb7e735cecc7fd38599e88a27412b83bce1e80375253"
     },
     {
       "path": "rmm-windows/ShadowAIInventory.ps1",
-      "sha256": "54967d39e70ea05b39a3209bba8a1efbcd0a3ce693fd413e3b57460cc5c693b8"
+      "sha256": "61dd7aa2a355a0905cb00a27aaac73e2466560da985875f249ff5106abbf941c"
     },
     {
       "path": "watchlists/shadow_ai_domains.csv",

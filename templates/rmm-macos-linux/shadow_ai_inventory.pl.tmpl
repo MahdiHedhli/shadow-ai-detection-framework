@@ -2,6 +2,8 @@
 use strict;
 use warnings;
 use JSON::PP qw(decode_json encode_json);
+use IO::Compress::Gzip qw(gzip);
+use MIME::Base64 qw(encode_base64);
 use POSIX qw(strftime);
 use Sys::Hostname qw(hostname);
 
@@ -14,6 +16,8 @@ my $DOMAINS = decode_json(q~{{DOMAIN_CATALOG_JSON}}~);
 my $MAX_FINDINGS = 5000;
 my $MAX_HOMES = 256;
 my $MAX_HISTORY_BYTES = 268435456;
+my $RMM_COMPRESS_THRESHOLD_BYTES = 12000;
+my $RMM_MAX_TRANSPORT_CHARS = 24000;
 my @findings;
 my @errors;
 my $partial = JSON::PP::false;
@@ -260,7 +264,7 @@ sub collect_history {
 my $self_test = @ARGV && $ARGV[0] eq '--self-test';
 my $doc = {
     schema_version => '1.0', observation_id => uuid(), collected_at => utc_now(),
-    collector => { name => 'shadow-ai-rmm-macos-native', version => '0.1.0', partial => JSON::PP::false, errors => \@errors },
+    collector => { name => 'shadow-ai-rmm-macos-native', version => '0.2.0', partial => JSON::PP::false, errors => \@errors },
     device => { hostname => hostname() || 'unknown', os_family => 'macos', os_version => 'macOS ' . ((`/usr/bin/sw_vers -productVersion 2>/dev/null` || 'unknown') =~ s/\s+\z//r), architecture => ((`/usr/bin/uname -m 2>/dev/null` || 'unknown') =~ s/\s+\z//r) },
     scope => ['processes', 'known_paths', 'browser_extensions', 'browser_history'],
     safety => { content_collected => JSON::PP::false, raw_command_line_collected => JSON::PP::false,
@@ -274,5 +278,18 @@ if (!$self_test) {
         or record_error('collector', 'unexpected_error');
 }
 $doc->{collector}->{partial} = $partial;
-print encode_json($doc), "\n";
+my $output = encode_json($doc);
+if (length($output) > $RMM_COMPRESS_THRESHOLD_BYTES) {
+    my $compressed = '';
+    gzip(\$output => \$compressed, Level => 9) or do {
+        print STDERR "fatal:rmm_gzip_failed\n";
+        exit 1;
+    };
+    $output = 'SHADOWAI_GZIP_V1:' . encode_base64($compressed, '');
+    if (length($output) > $RMM_MAX_TRANSPORT_CHARS) {
+        print STDERR "fatal:rmm_output_size_limit\n";
+        exit 1;
+    }
+}
+print $output, "\n";
 exit($partial ? 2 : 0);

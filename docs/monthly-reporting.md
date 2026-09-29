@@ -231,6 +231,11 @@ view: the malformed row is excluded and the dashboard displays a warning with
 the count and that affected findings are missing. Re-export or rerun those
 executions before interpreting that view as complete. This flag is not a way
 to suppress other malformed rows or broaden the selected task/client scope.
+Current collectors prevent most such truncation by emitting a bounded
+`SHADOWAI_GZIP_V1:` envelope when compact JSON exceeds 12,000 bytes. Intake
+decodes that envelope before schema validation and archives ordinary JSON.
+Legacy tasks must be updated to use the current collector build; already
+truncated rows still require a fresh execution.
 
 For a single repeatable refresh of the archive, both BrightGauge CSV feeds, and
 the sortable technician HTML view, run:

@@ -42,40 +42,8 @@ class FilterResult(NamedTuple):
 
 
 def parse_scanner_output(raw: str) -> dict[str, Any]:
-    """Parse scanner JSON, including BrightGauge's observed semicolon separators.
-
-    Only semicolons outside JSON strings are normalized. The result still must
-    pass the strict JSON parser and full observation schema validation.
-    """
-    try:
-        document = json.loads(raw)
-    except json.JSONDecodeError as strict_error:
-        normalized: list[str] = []
-        in_string = False
-        escaped = False
-        changed = False
-        for character in raw:
-            if in_string:
-                normalized.append(character)
-                if escaped:
-                    escaped = False
-                elif character == "\\":
-                    escaped = True
-                elif character == '"':
-                    in_string = False
-            elif character == '"':
-                in_string = True
-                normalized.append(character)
-            elif character == ";":
-                normalized.append(",")
-                changed = True
-            else:
-                normalized.append(character)
-        if not changed or in_string:
-            raise strict_error
-        document = json.loads("".join(normalized))
-    validate_observation.validate_document(document)
-    return document
+    """Compatibility wrapper for the importer's canonical transport parser."""
+    return importer.parse_scanner_output(raw)
 
 
 def filter_export(
@@ -151,7 +119,7 @@ def filter_export(
                             raise FilterError(f"selected task row {row_number} has missing or oversized output")
                         try:
                             document = parse_scanner_output(raw)
-                        except (json.JSONDecodeError, validate_observation.ObservationError, TypeError, KeyError, AttributeError) as exc:
+                        except (json.JSONDecodeError, importer.rmm_output.RmmOutputError, validate_observation.ObservationError, TypeError, KeyError, AttributeError) as exc:
                             if allow_truncated_rows and len(raw) == BRIGHTGAUGE_OUTPUT_CELL_LIMIT:
                                 incomplete_rows += 1
                                 continue

@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import build_dashboard_feed
+import rmm_output
 import validate_observation
 
 
@@ -35,6 +36,40 @@ class ImportError(ValueError):
 
 def canonical(document: dict[str, Any]) -> str:
     return json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def parse_scanner_output(raw: str) -> dict[str, Any]:
+    """Decode transport envelopes, parse legacy JSON, and validate the result."""
+    decoded = rmm_output.decode_output(raw)
+    try:
+        document = json.loads(decoded)
+    except json.JSONDecodeError as strict_error:
+        normalized: list[str] = []
+        in_string = False
+        escaped = False
+        changed = False
+        for character in decoded:
+            if in_string:
+                normalized.append(character)
+                if escaped:
+                    escaped = False
+                elif character == "\\":
+                    escaped = True
+                elif character == '"':
+                    in_string = False
+            elif character == '"':
+                in_string = True
+                normalized.append(character)
+            elif character == ";":
+                normalized.append(",")
+                changed = True
+            else:
+                normalized.append(character)
+        if not changed or in_string:
+            raise strict_error
+        document = json.loads("".join(normalized))
+    validate_observation.validate_document(document)
+    return document
 
 
 def load_clients(manifest_path: Path) -> dict[str, dict[str, Any]]:
@@ -82,9 +117,8 @@ def read_export(path: Path, task_name: str, clients_by_company: dict[str, dict[s
                 if not raw or len(raw.encode("utf-8")) > MAX_OBSERVATION_BYTES:
                     raise ImportError(f"row {row_number} has missing or oversized execution_output")
                 try:
-                    document = json.loads(raw)
-                    validate_observation.validate_document(document)
-                except (json.JSONDecodeError, validate_observation.ObservationError, TypeError, KeyError, AttributeError) as exc:
+                    document = parse_scanner_output(raw)
+                except (json.JSONDecodeError, rmm_output.RmmOutputError, validate_observation.ObservationError, TypeError, KeyError, AttributeError) as exc:
                     raise ImportError(f"row {row_number} has invalid scanner JSON: {exc}") from exc
                 observation_id = document["observation_id"]
                 normalized = canonical(document)
