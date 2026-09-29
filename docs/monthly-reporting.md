@@ -221,6 +221,17 @@ restricted storage and follow the approved source-retention process; do not
 print either file's contents or commit them to this repository. This is a
 fallback intake step, not authorization to create or export a broad dataset.
 
+Some BrightGauge Automation Details exports use semicolons between JSON
+members. The reducer normalizes only semicolons outside quoted JSON strings,
+then still requires strict JSON parsing and full schema validation. If a
+selected execution output is exactly 30,000 characters and cannot be parsed,
+the default is to fail the import. This may indicate truncation at the export
+limit. Use `--allow-truncated-rows` only for a deliberately partial technician
+view: the malformed row is excluded and the dashboard displays a warning with
+the count and that affected findings are missing. Re-export or rerun those
+executions before interpreting that view as complete. This flag is not a way
+to suppress other malformed rows or broaden the selected task/client scope.
+
 For a single repeatable refresh of the archive, both BrightGauge CSV feeds, and
 the sortable technician HTML view, run:
 

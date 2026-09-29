@@ -89,6 +89,36 @@ class DiscoverRmmClientsTests(unittest.TestCase):
             with self.assertRaises(discover_rmm_clients.DiscoveryError):
                 discover_rmm_clients.discover_clients(source, "Other exact task")
 
+    def test_accepts_printable_display_name_company_ids_from_brightgauge(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "broad.csv"
+            company = "Client A & Partners, LLC"
+            self.write_export(source, [{
+                "company_unique_id": company,
+                "company_name": company,
+                "task_name": TASK,
+                "execution_output": "not copied",
+            }])
+
+            self.assertEqual(discover_rmm_clients.write_manifest(source, TASK, root / "private" / "clients.json"), 1)
+            clients = build_dashboard_feed.load_manifest(root / "private" / "clients.json")
+            self.assertEqual(clients[0]["rmm_company_unique_id"], company)
+
+    def test_rejects_formula_prefixed_or_control_character_company_ids(self) -> None:
+        for invalid in ("=Client Name", "@Client Name", "Client\nName"):
+            with self.subTest(invalid=repr(invalid)), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source = root / "broad.csv"
+                self.write_export(source, [{
+                    "company_unique_id": invalid,
+                    "company_name": "Client Name",
+                    "task_name": TASK,
+                    "execution_output": "not copied",
+                }])
+                with self.assertRaises(discover_rmm_clients.DiscoveryError):
+                    discover_rmm_clients.discover_clients(source, TASK)
+
     def test_refuses_existing_output_and_public_repository_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

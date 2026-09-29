@@ -55,7 +55,7 @@ def discover_clients(input_path: Path, task_name: str) -> list[dict[str, str]]:
                     continue
                 company_id = str(row.get("company_unique_id") or "").strip()
                 company_name = str(row.get("company_name") or "").strip()
-                if not company_id or not build_dashboard_feed.RMM_COMPANY_ID.fullmatch(company_id):
+                if not build_dashboard_feed.valid_rmm_company_id(company_id):
                     raise DiscoveryError(f"selected task row {row_number} has an invalid company ID")
                 if not company_name or len(company_name) > 120:
                     raise DiscoveryError(f"selected task row {row_number} has a missing or oversized company name")

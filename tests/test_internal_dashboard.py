@@ -58,6 +58,17 @@ class InternalDashboardTests(unittest.TestCase):
         self.assertIn("latest scan per endpoint", page)
         self.assertTrue(all("_endpoint_key" not in row and "_observation_id" not in row for row in payload["scans"]))
 
+    def test_incomplete_source_note_is_visible_and_rendered_as_text(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = self.make_private_inputs(Path(temporary))
+            note = 'Source export incomplete: 1 result excluded <script>alert("x")</script>.'
+            payload = dashboard.build_payload(manifest, None, note)
+        page = dashboard.make_html(payload)
+        self.assertIn('id="importNotice" hidden', page)
+        self.assertIn('$("importNotice").textContent=data.import_note', page)
+        self.assertNotIn('Source export incomplete: 1 result excluded <script>', page)
+        self.assertIn("Source export incomplete: 1 result excluded", page)
+
     def test_payload_uses_only_latest_scan_per_endpoint_without_backfilling_partial(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

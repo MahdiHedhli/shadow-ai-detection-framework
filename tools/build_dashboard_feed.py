@@ -26,7 +26,6 @@ import build_report
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_SCHEMA_VERSION = "1.0"
 CLIENT_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
-RMM_COMPANY_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 FINDING_FIELDS = [
     "schema_version", "client_id", "client_label", "finding_key", "finding_id",
     "observation_id", "collected_at", "observed_at", "os_family", "provider_id",
@@ -47,6 +46,24 @@ SAFE_ATTRIBUTES = {
 
 class FeedError(ValueError):
     """Raised when a manifest or output violates feed safety requirements."""
+
+
+def valid_rmm_company_id(value: str) -> bool:
+    """Accept bounded printable RMM identifiers, including display-name IDs.
+
+    BrightGauge's Automation Details export may populate company_unique_id
+    with the visible company name, including spaces and punctuation. These
+    values are used only for exact matching and are never used as paths or
+    emitted as a dashboard identifier.
+    """
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and value == value.strip()
+        and len(value) <= 128
+        and value.isprintable()
+        and value[0] not in "=+-@"
+    )
 
 
 def outside_public_repo(path: Path, what: str) -> Path:
@@ -94,7 +111,7 @@ def load_manifest(path: Path) -> list[dict[str, Any]]:
         if label.casefold() in seen_labels:
             raise FeedError("client labels must be unique ignoring case")
         if rmm_company_id is not None:
-            if not isinstance(rmm_company_id, str) or not RMM_COMPANY_ID.fullmatch(rmm_company_id):
+            if not valid_rmm_company_id(rmm_company_id):
                 raise FeedError(f"client entry {index} has an invalid rmm_company_unique_id")
             if any(entry.get("rmm_company_unique_id") == rmm_company_id for entry in normalized):
                 raise FeedError("duplicate rmm_company_unique_id in manifest")

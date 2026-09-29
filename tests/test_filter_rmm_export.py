@@ -65,7 +65,7 @@ class FilterRmmExportTests(unittest.TestCase):
             ])
             source_before = source.read_bytes()
 
-            self.assertEqual(task_filter.filter_export(source, self.make_manifest(root), TASK, output), (1, 1))
+            self.assertEqual(task_filter.filter_export(source, self.make_manifest(root), TASK, output), (1, 1, 0))
 
             self.assertEqual(source.read_bytes(), source_before)
             with output.open("r", encoding="utf-8", newline="") as handle:
@@ -117,6 +117,35 @@ class FilterRmmExportTests(unittest.TestCase):
             with self.assertRaises(task_filter.FilterError):
                 task_filter.filter_export(source, manifest, TASK, output)
             self.assertEqual(output.read_text(encoding="utf-8"), "keep")
+
+    def test_normalizes_semicolon_separators_only_outside_json_strings(self) -> None:
+        document = observation("HOST-A", "anthropic", "browser_extension", {"extension_name": "Claude; Desktop"})
+        encoded = json.dumps(document, separators=(",", ":"))
+        malformed_export = encoded.replace(',"', ';"')
+
+        parsed = task_filter.parse_scanner_output(malformed_export)
+
+        self.assertEqual(parsed, document)
+        self.assertEqual(parsed["findings"][0]["attributes"]["extension_name"], "Claude; Desktop")
+
+    def test_can_exclude_only_exact_limit_malformed_output_and_reports_incompleteness(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "broad.csv"
+            output = root / "private" / "shadow-ai.csv"
+            valid = observation("HOST-A", "anthropic", "browser_extension", {"extension_name": "Claude"})
+            self.write_export(source, [
+                {"company_unique_id": "company-001", "task_name": TASK, "execution_output": json.dumps(valid), "unrelated_column": ""},
+                {"company_unique_id": "company-001", "task_name": TASK, "execution_output": "x" * task_filter.BRIGHTGAUGE_OUTPUT_CELL_LIMIT, "unrelated_column": ""},
+            ])
+            with self.assertRaises(task_filter.FilterError):
+                task_filter.filter_export(source, self.make_manifest(root), TASK, output)
+            self.assertFalse(output.exists())
+
+            result = task_filter.filter_export(source, self.make_manifest(root), TASK, output, allow_truncated_rows=True)
+            self.assertEqual(result, (1, 0, 1))
+            with output.open("r", encoding="utf-8", newline="") as handle:
+                self.assertEqual(len(list(csv.DictReader(handle))), 1)
 
     def test_rejects_public_repository_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

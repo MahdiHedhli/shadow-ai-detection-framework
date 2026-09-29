@@ -16,7 +16,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import build_dashboard_feed
 import import_rmm_task_export as importer
@@ -28,10 +28,54 @@ MAX_EXPORT_BYTES = importer.MAX_EXPORT_BYTES
 MAX_ROWS = importer.MAX_ROWS
 MAX_OBSERVATION_BYTES = importer.MAX_OBSERVATION_BYTES
 MAX_VALIDATED_BYTES = importer.MAX_VALIDATED_BYTES
+BRIGHTGAUGE_OUTPUT_CELL_LIMIT = 30_000
 
 
 class FilterError(ValueError):
     """Raised when a broad export cannot be safely reduced."""
+
+
+class FilterResult(NamedTuple):
+    selected: int
+    skipped: int
+    incomplete: int
+
+
+def parse_scanner_output(raw: str) -> dict[str, Any]:
+    """Parse scanner JSON, including BrightGauge's observed semicolon separators.
+
+    Only semicolons outside JSON strings are normalized. The result still must
+    pass the strict JSON parser and full observation schema validation.
+    """
+    try:
+        document = json.loads(raw)
+    except json.JSONDecodeError as strict_error:
+        normalized: list[str] = []
+        in_string = False
+        escaped = False
+        changed = False
+        for character in raw:
+            if in_string:
+                normalized.append(character)
+                if escaped:
+                    escaped = False
+                elif character == "\\":
+                    escaped = True
+                elif character == '"':
+                    in_string = False
+            elif character == '"':
+                in_string = True
+                normalized.append(character)
+            elif character == ";":
+                normalized.append(",")
+                changed = True
+            else:
+                normalized.append(character)
+        if not changed or in_string:
+            raise strict_error
+        document = json.loads("".join(normalized))
+    validate_observation.validate_document(document)
+    return document
 
 
 def filter_export(
@@ -39,7 +83,8 @@ def filter_export(
     manifest_path: Path,
     task_name: str,
     output_path: Path,
-) -> tuple[int, int]:
+    allow_truncated_rows: bool = False,
+) -> FilterResult:
     """Write only validated rows for task_name and manifest-mapped RMM companies."""
     source = build_dashboard_feed.outside_public_repo(input_path, "RMM source export")
     destination = build_dashboard_feed.outside_public_repo(output_path, "task-scoped RMM export")
@@ -71,6 +116,7 @@ def filter_export(
     temporary_path: Path | None = None
     selected_rows = 0
     skipped_rows = 0
+    incomplete_rows = 0
     validated_bytes = 0
     try:
         descriptor, temporary = tempfile.mkstemp(prefix=".shadow-ai-task-filter-", suffix=".tmp", dir=destination.parent)
@@ -106,9 +152,11 @@ def filter_export(
                         if not raw or len(raw.encode("utf-8")) > MAX_OBSERVATION_BYTES:
                             raise FilterError(f"selected task row {row_number} has missing or oversized output")
                         try:
-                            document: dict[str, Any] = json.loads(raw)
-                            validate_observation.validate_document(document)
+                            document = parse_scanner_output(raw)
                         except (json.JSONDecodeError, validate_observation.ObservationError, TypeError, KeyError, AttributeError) as exc:
+                            if allow_truncated_rows and len(raw) == BRIGHTGAUGE_OUTPUT_CELL_LIMIT:
+                                incomplete_rows += 1
+                                continue
                             raise FilterError(f"selected task row {row_number} has invalid scanner JSON: {exc}") from exc
 
                         normalized = importer.canonical(document)
@@ -140,7 +188,7 @@ def filter_export(
     finally:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
-    return selected_rows, skipped_rows
+    return FilterResult(selected_rows, skipped_rows, incomplete_rows)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -149,13 +197,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--manifest", required=True, type=Path, help="private client manifest with RMM company IDs")
     parser.add_argument("--task-name", required=True, help="exact Shadow AI collector task name")
     parser.add_argument("--output", required=True, type=Path, help="new private task-scoped CSV outside this repository")
+    parser.add_argument("--allow-truncated-rows", action="store_true", help="exclude malformed exact-30,000-character outputs and report them as incomplete")
     args = parser.parse_args(argv)
     try:
-        selected, skipped = filter_export(args.input, args.manifest, args.task_name, args.output)
+        result = filter_export(args.input, args.manifest, args.task_name, args.output, args.allow_truncated_rows)
     except (FilterError, importer.ImportError, build_dashboard_feed.FeedError, validate_observation.ObservationError) as exc:
         print(f"Could not create task-scoped Shadow AI export: {exc}", file=sys.stderr)
         return 1
-    print(f"Wrote {selected} validated rows for the exact task; skipped {skipped} unrelated task rows.")
+    print(f"Wrote {result.selected} validated rows for the exact task; skipped {result.skipped} unrelated task rows.")
+    if result.incomplete:
+        print(f"Excluded {result.incomplete} malformed 30,000-character scanner output(s) as incomplete; inspect or re-export them.")
     print("The original export was left unchanged. Both files contain confidential telemetry; keep them in restricted storage.")
     return 0
 

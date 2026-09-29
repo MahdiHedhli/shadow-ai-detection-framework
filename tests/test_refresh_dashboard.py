@@ -69,8 +69,8 @@ class RefreshDashboardTests(unittest.TestCase):
                 html / "internal.html",
             )
 
-            added, already_present, finding_count, scan_count, findings, scans, dashboard, filtered, unrelated = result
-            self.assertEqual((added, already_present, finding_count, scan_count, filtered, unrelated), (1, 0, 1, 1, 1, 1))
+            added, already_present, finding_count, scan_count, findings, scans, dashboard, filtered, unrelated, incomplete = result
+            self.assertEqual((added, already_present, finding_count, scan_count, filtered, unrelated, incomplete), (1, 0, 1, 1, 1, 1, 0))
             self.assertTrue(findings.exists())
             self.assertTrue(scans.exists())
             self.assertIn("Pilot Client", dashboard.read_text(encoding="utf-8"))
@@ -129,8 +129,8 @@ class RefreshDashboardTests(unittest.TestCase):
                 html_dir / "dashboard.html",
             )
 
-            added, skipped, finding_count, scan_count, findings, scans, dashboard, filtered, unrelated = result
-            self.assertEqual((added, skipped, finding_count, scan_count, filtered, unrelated), (1, 0, 1, 1, 1, 1))
+            added, skipped, finding_count, scan_count, findings, scans, dashboard, filtered, unrelated, incomplete = result
+            self.assertEqual((added, skipped, finding_count, scan_count, filtered, unrelated, incomplete), (1, 0, 1, 1, 1, 1, 0))
             self.assertTrue(findings.exists())
             self.assertTrue(scans.exists())
             self.assertTrue(dashboard.exists())
@@ -196,7 +196,7 @@ class RefreshDashboardTests(unittest.TestCase):
             self.assertIn("anthropic", findings_text)
             self.assertIn("Claude", findings_text)
             self.assertIn("complete", scans_text)
-            self.assertIn("Export selected client CSV", dashboard_text)
+            self.assertIn("Export client CSV", dashboard_text)
             self.assertIn("Client comparison", dashboard_text)
             self.assertIn('data-client-sort="finding_observations"', dashboard_text)
             self.assertIn('data-client-sort="client_label"', dashboard_text)
