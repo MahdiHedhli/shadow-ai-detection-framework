@@ -141,6 +141,55 @@ class RefreshDashboardTests(unittest.TestCase):
                 self.assertNotIn("UNRELATED_PRIVATE_OUTPUT_DO_NOT_COPY", content)
                 self.assertNotIn("PRIVATE-TEST-HOST", content)
 
+    def test_one_command_refresh_combines_explicit_platform_tasks_across_clients(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest = root / "clients.json"
+            manifest.write_text(json.dumps({
+                "schema_version": "1.0",
+                "clients": [
+                    {"client_id": "client-a", "client_label": "Client A", "rmm_company_unique_id": "company-001", "observations": "client-a/observations"},
+                    {"client_id": "client-b", "client_label": "Client B", "rmm_company_unique_id": "company-002", "observations": "client-b/observations"},
+                ],
+            }), encoding="utf-8")
+            windows_task = "Shadow AI Inventory - Windows v0.6.6"
+            macos_task = "Shadow AI Inventory - macOS (Perl) v0.1.0"
+            windows = observation("PRIVATE-WINDOWS-HOST", "anthropic", "browser_extension", {"extension_name": "Claude"})
+            macos = observation("PRIVATE-MACOS-HOST", "openai", "browser_history", {"matched_domain": "chatgpt.com"})
+            export = root / "broad-export.csv"
+            with export.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["company_unique_id", "company_name", "task_name", "execution_output", "other"])
+                writer.writeheader()
+                writer.writerows([
+                    {"company_unique_id": "company-001", "company_name": "Client A", "task_name": windows_task, "execution_output": json.dumps(windows), "other": "private"},
+                    {"company_unique_id": "company-002", "company_name": "Client B", "task_name": macos_task, "execution_output": json.dumps(macos), "other": "private"},
+                    {"company_unique_id": "company-001", "company_name": "Client A", "task_name": "Shadow AI Inventory - Windows v0.6.5", "execution_output": "unselected private output", "other": "private"},
+                ])
+            staging = root / "staging"
+            staging.mkdir(mode=0o700)
+            feeds = root / "feeds"
+            feeds.mkdir(mode=0o700)
+            html_dir = root / "html"
+            html_dir.mkdir(mode=0o700)
+
+            result = refresh_dashboard_from_rmm_export.refresh_from_export(
+                export,
+                manifest,
+                [windows_task, macos_task],
+                staging,
+                feeds,
+                html_dir / "dashboard.html",
+            )
+
+            added, skipped, finding_count, scan_count, findings, scans, dashboard, filtered, unrelated, incomplete = result
+            self.assertEqual((added, skipped, finding_count, scan_count, filtered, unrelated, incomplete), (2, 0, 2, 2, 2, 1, 0))
+            self.assertIn("Client A", dashboard.read_text(encoding="utf-8"))
+            self.assertIn("Client B", dashboard.read_text(encoding="utf-8"))
+            self.assertNotIn("PRIVATE-WINDOWS-HOST", dashboard.read_text(encoding="utf-8"))
+            self.assertNotIn("PRIVATE-MACOS-HOST", dashboard.read_text(encoding="utf-8"))
+            self.assertNotIn("unselected private output", findings.read_text(encoding="utf-8"))
+            self.assertEqual(list(staging.iterdir()), [])
+
     def test_refresh_archives_and_builds_both_feeds_and_private_dashboard(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

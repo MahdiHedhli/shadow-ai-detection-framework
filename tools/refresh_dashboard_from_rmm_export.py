@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the private technician dashboard from an RMM export.
+"""Build the private technician dashboard from selected scanner tasks in an RMM export.
 
 The source may contain multiple task types. This command first reduces it in a
 restricted temporary directory to validated rows for the exact scanner task
@@ -26,7 +26,7 @@ import validate_observation
 def refresh_from_export(
     input_path: Path,
     manifest_path: Path,
-    task_name: str,
+    task_name: str | list[str] | tuple[str, ...],
     staging_dir: Path,
     output_dir: Path,
     dashboard_path: Path,
@@ -67,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, type=Path, help="RMM/BrightGauge CSV source; left unchanged")
     parser.add_argument("--manifest", required=True, type=Path, help="private client manifest with RMM company IDs")
-    parser.add_argument("--task-name", required=True, help="exact Shadow AI collector task name")
+    parser.add_argument("--task-name", required=True, action="append", help="exact Shadow AI collector task name; repeat for additional platform/version tasks")
     parser.add_argument("--staging-dir", required=True, type=Path, help="private local directory for transient filtered CSV")
     parser.add_argument("--output-dir", required=True, type=Path, help="private directory for BrightGauge CSV feeds")
     parser.add_argument("--dashboard", required=True, type=Path, help="private path for technician HTML dashboard")
@@ -100,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     added, already_present, finding_count, scan_count, findings, scans, dashboard, filtered, skipped, incomplete = result
-    print(f"Filtered to {filtered} validated rows for the exact scanner task; skipped {skipped} unrelated task rows.")
+    print(f"Filtered to {filtered} validated rows for the selected exact scanner tasks; skipped {skipped} unrelated task rows.")
     if incomplete:
         print(f"Excluded {incomplete} malformed 30,000-character scanner output(s); dashboard is visibly marked incomplete.")
     print(f"Archived {added} new observations; {already_present} identical observations were already present.")

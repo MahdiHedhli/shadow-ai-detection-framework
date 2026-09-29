@@ -105,6 +105,20 @@ class DiscoverRmmClientsTests(unittest.TestCase):
             clients = build_dashboard_feed.load_manifest(root / "private" / "clients.json")
             self.assertEqual(clients[0]["rmm_company_unique_id"], company)
 
+    def test_discovery_unions_companies_from_explicit_platform_task_names(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "broad.csv"
+            self.write_export(source, [
+                {"company_unique_id": "company-001", "company_name": "Client A", "task_name": TASK, "execution_output": "not copied"},
+                {"company_unique_id": "company-002", "company_name": "Client B", "task_name": "Shadow AI Inventory - macOS (Perl)", "execution_output": "not copied"},
+                {"company_unique_id": "company-003", "company_name": "Unrelated Client", "task_name": "Unselected version", "execution_output": "secret"},
+            ])
+
+            clients = discover_rmm_clients.discover_clients(source, [TASK, "Shadow AI Inventory - macOS (Perl)"])
+
+            self.assertEqual([client["client_label"] for client in clients], ["Client A", "Client B"])
+
     def test_rejects_formula_prefixed_or_control_character_company_ids(self) -> None:
         for invalid in ("=Client Name", "@Client Name", "Client\nName"):
             with self.subTest(invalid=repr(invalid)), tempfile.TemporaryDirectory() as temporary:

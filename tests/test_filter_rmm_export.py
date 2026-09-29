@@ -83,6 +83,32 @@ class FilterRmmExportTests(unittest.TestCase):
                 self.assertEqual(output.stat().st_mode & 0o777, 0o600)
                 self.assertEqual(output.parent.stat().st_mode & 0o777, 0o700)
 
+    def test_filters_multiple_explicit_exact_task_names(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "broad.csv"
+            output = root / "private" / "shadow-ai.csv"
+            windows = observation("HOST-W", "anthropic", "browser_extension", {"extension_name": "Claude"})
+            macos = observation("HOST-M", "openai", "browser_history", {"matched_domain": "chatgpt.com"})
+            self.write_export(source, [
+                {"company_unique_id": "company-001", "task_name": TASK, "execution_output": json.dumps(windows), "unrelated_column": ""},
+                {"company_unique_id": "company-001", "task_name": "Shadow AI Inventory - macOS (Perl)", "execution_output": json.dumps(macos), "unrelated_column": ""},
+                {"company_unique_id": "company-001", "task_name": "Shadow AI Inventory - Windows vNext", "execution_output": "not-json", "unrelated_column": ""},
+            ])
+
+            result = task_filter.filter_export(
+                source,
+                self.make_manifest(root),
+                [TASK, "Shadow AI Inventory - macOS (Perl)"],
+                output,
+            )
+
+            self.assertEqual(result, (2, 1, 0))
+            with output.open("r", encoding="utf-8", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual({row["task_name"] for row in rows}, {TASK, "Shadow AI Inventory - macOS (Perl)"})
+            self.assertEqual({json.loads(row["execution_output"])["device"]["hostname"] for row in rows}, {"HOST-W", "HOST-M"})
+
     def test_rejects_unmapped_selected_task_without_publishing_output(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

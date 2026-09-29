@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Validate and archive observations from a task-scoped RMM CSV export.
+"""Validate and archive observations from selected exact tasks in an RMM CSV export.
 
 The CSV, client manifest, and resulting observations contain private telemetry.
-This importer accepts only rows for one exact scanner task and only mapped RMM
+This importer accepts only rows for explicitly allowed exact scanner tasks and only mapped RMM
 company IDs; keep every file outside this public repository.
 """
 
@@ -84,8 +84,25 @@ def load_clients(manifest_path: Path) -> dict[str, dict[str, Any]]:
     return by_company_id
 
 
-def read_export(path: Path, task_name: str, clients_by_company: dict[str, dict[str, Any]]) -> list[tuple[Path, dict[str, Any]]]:
+def normalize_task_names(task_names: str | list[str] | tuple[str, ...]) -> frozenset[str]:
+    """Validate one or more explicit, exact RMM task names."""
+    names = (task_names,) if isinstance(task_names, str) else tuple(task_names)
+    if not names or any(
+        not isinstance(name, str)
+        or not name.strip()
+        or name != name.strip()
+        or name[:1] in "=+-@"
+        for name in names
+    ):
+        raise ImportError("task names must be non-empty exact names and cannot begin with a spreadsheet formula prefix")
+    if len(set(names)) != len(names):
+        raise ImportError("task names must not contain duplicates")
+    return frozenset(names)
+
+
+def read_export(path: Path, task_names: str | list[str] | tuple[str, ...], clients_by_company: dict[str, dict[str, Any]]) -> list[tuple[Path, dict[str, Any]]]:
     path = build_dashboard_feed.outside_public_repo(path, "RMM task export")
+    allowed_task_names = normalize_task_names(task_names)
     try:
         size = path.stat().st_size
     except OSError as exc:
@@ -107,8 +124,8 @@ def read_export(path: Path, task_name: str, clients_by_company: dict[str, dict[s
             for row_number, row in enumerate(reader, start=2):
                 if row_number - 1 > MAX_ROWS:
                     raise ImportError("RMM task export exceeds the 10,000-row safety limit")
-                if str(row.get("task_name") or "").strip() != task_name:
-                    raise ImportError(f"row {row_number} is not for the requested task; export only the exact scanner task")
+                if str(row.get("task_name") or "").strip() not in allowed_task_names:
+                    raise ImportError(f"row {row_number} is not for an allowed exact task; export only selected scanner tasks")
                 company_id = str(row.get("company_unique_id") or "").strip()
                 client = clients_by_company.get(company_id)
                 if client is None:
@@ -181,9 +198,9 @@ def store_observation(archive: Path, document: dict[str, Any]) -> bool:
     return True
 
 
-def import_export(input_path: Path, manifest_path: Path, task_name: str) -> tuple[int, int]:
+def import_export(input_path: Path, manifest_path: Path, task_names: str | list[str] | tuple[str, ...]) -> tuple[int, int]:
     clients = load_clients(manifest_path)
-    observations = read_export(input_path, task_name, clients)
+    observations = read_export(input_path, task_names, clients)
     added = sum(store_observation(archive, document) for archive, document in observations)
     return added, len(observations) - added
 
@@ -192,7 +209,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, type=Path, help="task-scoped BrightGauge/RMM CSV outside this repository")
     parser.add_argument("--manifest", required=True, type=Path, help="private client manifest with RMM company IDs, outside this repository")
-    parser.add_argument("--task-name", required=True, help="exact scanner task name selected in the source export")
+    parser.add_argument("--task-name", required=True, action="append", help="exact scanner task name selected in the source export; repeat for additional platform/version tasks")
     args = parser.parse_args(argv)
     try:
         added, skipped = import_export(args.input, args.manifest, args.task_name)

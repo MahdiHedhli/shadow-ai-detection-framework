@@ -49,6 +49,11 @@ class RmmImportTests(unittest.TestCase):
             writer.writeheader()
             writer.writerows(rows)
 
+    def test_exact_task_allowlist_rejects_duplicates_and_formula_prefixes(self) -> None:
+        for names in ([TASK, TASK], ["=unsafe task"]):
+            with self.subTest(names=names), self.assertRaises(importer.ImportError):
+                importer.normalize_task_names(names)
+
     def test_import_archives_only_valid_mapped_rows_and_is_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -73,6 +78,25 @@ class RmmImportTests(unittest.TestCase):
             if os.name == "posix":
                 self.assertEqual(first.stat().st_mode & 0o777, 0o600)
                 self.assertEqual(first.parent.stat().st_mode & 0o777, 0o700)
+
+    def test_import_accepts_multiple_explicit_exact_task_names(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest = self.make_manifest(root)
+            output = root / "automation.csv"
+            windows = observation("PRIVATE-WINDOWS", "anthropic", "browser_extension", {"extension_name": "Claude"})
+            macos = observation("PRIVATE-MACOS", "openai", "browser_history", {"matched_domain": "chatgpt.com"})
+            self.make_csv(output, [
+                {"company_unique_id": "company-001", "task_name": TASK, "execution_output": json.dumps(windows)},
+                {"company_unique_id": "company-001", "task_name": "Shadow AI Inventory - macOS (Perl)", "execution_output": json.dumps(macos)},
+            ])
+
+            self.assertEqual(
+                importer.import_export(output, manifest, [TASK, "Shadow AI Inventory - macOS (Perl)"]),
+                (2, 0),
+            )
+            self.assertTrue((root / "client-a/observations" / f"{windows['observation_id']}.json").exists())
+            self.assertTrue((root / "client-a/observations" / f"{macos['observation_id']}.json").exists())
 
     def test_import_decodes_large_transport_and_archives_plain_validated_json(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

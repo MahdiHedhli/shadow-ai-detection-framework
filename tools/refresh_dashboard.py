@@ -24,14 +24,14 @@ import validate_observation
 def refresh(
     input_path: Path,
     manifest_path: Path,
-    task_name: str,
+    task_name: str | list[str] | tuple[str, ...],
     output_dir: Path,
     dashboard_path: Path,
     period: str | None = None,
     overwrite: bool = False,
     import_note: str | None = None,
 ) -> tuple[int, int, int, int, Path, Path, Path]:
-    """Import one exact RMM task export, then rebuild all private views."""
+    """Import explicitly allowed exact RMM task exports, then rebuild all private views."""
     output_dir = build_dashboard_feed.outside_public_repo(output_dir, "dashboard feed directory")
     dashboard_path = build_dashboard_feed.outside_public_repo(dashboard_path, "dashboard output")
     for directory in (output_dir, dashboard_path.parent):
@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, type=Path, help="task-scoped RMM CSV outside this repository")
     parser.add_argument("--manifest", required=True, type=Path, help="private client/archive manifest")
-    parser.add_argument("--task-name", required=True, help="exact scanner task name in the CSV")
+    parser.add_argument("--task-name", required=True, action="append", help="exact scanner task name in the CSV; repeat for additional platform/version tasks")
     parser.add_argument("--output-dir", required=True, type=Path, help="private directory for BrightGauge CSV feeds")
     parser.add_argument("--dashboard", required=True, type=Path, help="private path for technician HTML dashboard")
     parser.add_argument("--period", type=build_dashboard_feed.parse_period, help="optional collection month, YYYY-MM")

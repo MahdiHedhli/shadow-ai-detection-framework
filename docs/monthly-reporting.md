@@ -177,8 +177,12 @@ ambiguous company names so they can be reconciled manually.
 python3 tools/discover_rmm_clients.py \
   --input /secure/staging/automation-details.csv \
   --task-name "Shadow AI Inventory - Windows" \
+  --task-name "Shadow AI Inventory - macOS (Perl)" \
   --output /secure/shadow-ai/dashboard-clients.json
 ```
+
+Repeat `--task-name` to discover the union of clients represented by multiple
+explicit platform or versioned collector tasks.
 
 Review the generated private client labels and mappings before the first
 refresh. The manifest and every generated archive/feed/report remain outside
@@ -189,13 +193,17 @@ python3 tools/refresh_dashboard_from_rmm_export.py \
   --input /secure/staging/automation-details.csv \
   --manifest /secure/shadow-ai/dashboard-clients.json \
   --task-name "Shadow AI Inventory - Windows" \
+  --task-name "Shadow AI Inventory - macOS (Perl)" \
   --staging-dir /secure/staging/shadow-ai \
   --output-dir /secure/shadow-ai/brightgauge-feed \
   --dashboard /secure/shadow-ai/internal-dashboard.html
 ```
 
-This command validates and imports only the exact task rows whose RMM company
-IDs are mapped in the private manifest. It leaves the broad source unchanged,
+Repeat `--task-name` for every approved platform or versioned collector task
+that should feed the same dashboard. Each value is matched exactly; similar
+names and every task not explicitly listed remain excluded. The command
+validates and imports only those task rows whose RMM company IDs are mapped in
+the private manifest. It leaves the broad source unchanged,
 removes the temporary task-only CSV, and rebuilds the feeds/dashboard from the
 latest state in the private working archive. Existing outputs are protected
 unless `--overwrite` is supplied. It does not upload data to BrightGauge or
@@ -209,6 +217,7 @@ python3 tools/filter_rmm_task_export.py \
   --input /secure/staging/automation-details.csv \
   --manifest /secure/shadow-ai/dashboard-clients.json \
   --task-name "Shadow AI Inventory - Windows" \
+  --task-name "Shadow AI Inventory - macOS (Perl)" \
   --output /secure/staging/shadow-ai-task-only.csv
 ```
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a private per-company manifest from an exact-task RMM CSV export.
+"""Create a private per-company manifest from selected exact tasks in an RMM CSV export.
 
 Only company IDs and display names for the selected scanner task are retained.
 Execution output and all unrelated task rows are read but never copied or logged.
@@ -26,12 +26,11 @@ class DiscoveryError(ValueError):
     """Raised when the RMM export cannot safely produce a client manifest."""
 
 
-def discover_clients(input_path: Path, task_name: str) -> list[dict[str, str]]:
+def discover_clients(input_path: Path, task_names: str | list[str] | tuple[str, ...]) -> list[dict[str, str]]:
     source = build_dashboard_feed.outside_public_repo(input_path, "RMM source export")
     if source.is_symlink():
         raise DiscoveryError("RMM source export must not be a symbolic link")
-    if not task_name.strip() or task_name != task_name.strip() or task_name[:1] in "=+-@":
-        raise DiscoveryError("task name must be a non-empty exact name and cannot begin with a spreadsheet formula prefix")
+    allowed_task_names = import_rmm_task_export.normalize_task_names(task_names)
     try:
         if source.stat().st_size > MAX_EXPORT_BYTES:
             raise DiscoveryError("RMM source export exceeds the 512 MiB safety limit")
@@ -51,7 +50,7 @@ def discover_clients(input_path: Path, task_name: str) -> list[dict[str, str]]:
             for row_number, row in enumerate(reader, start=2):
                 if row_number - 1 > MAX_ROWS:
                     raise DiscoveryError("RMM source export exceeds the 10,000-row safety limit")
-                if str(row.get("task_name") or "").strip() != task_name:
+                if str(row.get("task_name") or "").strip() not in allowed_task_names:
                     continue
                 company_id = str(row.get("company_unique_id") or "").strip()
                 company_name = str(row.get("company_name") or "").strip()
@@ -66,7 +65,7 @@ def discover_clients(input_path: Path, task_name: str) -> list[dict[str, str]]:
     except (OSError, csv.Error, UnicodeDecodeError) as exc:
         raise DiscoveryError(f"could not read RMM source export: {exc}") from exc
     if not companies:
-        raise DiscoveryError("source export contains no rows for the exact scanner task")
+        raise DiscoveryError("source export contains no rows for the exact scanner tasks")
     labels = [name.casefold() for name in companies.values()]
     if len(labels) != len(set(labels)):
         raise DiscoveryError("company names are not unique; create a reviewed manifest to resolve client aliases")
@@ -83,11 +82,11 @@ def discover_clients(input_path: Path, task_name: str) -> list[dict[str, str]]:
     return clients
 
 
-def write_manifest(input_path: Path, task_name: str, output_path: Path) -> int:
+def write_manifest(input_path: Path, task_names: str | list[str] | tuple[str, ...], output_path: Path) -> int:
     destination = build_dashboard_feed.outside_public_repo(output_path, "private client manifest")
     if output_path.is_symlink() or destination.exists():
         raise DiscoveryError("manifest output must be a new, non-symbolic-link file")
-    clients = discover_clients(input_path, task_name)
+    clients = discover_clients(input_path, task_names)
     payload = json.dumps({"schema_version": "1.0", "clients": clients}, ensure_ascii=False, indent=2) + "\n"
     try:
         build_dashboard_feed.ensure_private_directory(destination.parent, "manifest directory")
@@ -113,7 +112,7 @@ def write_manifest(input_path: Path, task_name: str, output_path: Path) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, type=Path, help="BrightGauge/RMM CSV source; left unchanged")
-    parser.add_argument("--task-name", required=True, help="exact scanner task name")
+    parser.add_argument("--task-name", required=True, action="append", help="exact scanner task name; repeat to discover across additional platforms or versions")
     parser.add_argument("--output", required=True, type=Path, help="new private manifest path outside this repository")
     args = parser.parse_args(argv)
     try:
@@ -121,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     except (DiscoveryError, import_rmm_task_export.ImportError, build_dashboard_feed.FeedError, OSError) as exc:
         print(f"Could not create private RMM client manifest: {exc}", file=sys.stderr)
         return 1
-    print(f"Created a private manifest for {count} companies represented in the exact scanner task.")
+    print(f"Created a private manifest for {count} companies represented in the selected exact scanner tasks.")
     print("Only company names and IDs were retained; execution output and unrelated task rows were not copied.")
     return 0
 

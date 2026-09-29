@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Reduce a broad RMM CSV to one exact scanner task and mapped clients.
+"""Reduce a broad RMM CSV to explicitly allowed exact scanner tasks and mapped clients.
 
 This is a local, privacy-preserving intake step for cases where the RMM/BrightGauge
 UI cannot export a task-scoped file directly. It reads the broad source but only
-writes validated observations for the exact task and company IDs in the private
+writes validated observations for the selected exact tasks and company IDs in the private
 client manifest. The source file is never modified or removed.
 """
 
@@ -49,11 +49,11 @@ def parse_scanner_output(raw: str) -> dict[str, Any]:
 def filter_export(
     input_path: Path,
     manifest_path: Path,
-    task_name: str,
+    task_names: str | list[str] | tuple[str, ...],
     output_path: Path,
     allow_truncated_rows: bool = False,
 ) -> FilterResult:
-    """Write only validated rows for task_name and manifest-mapped RMM companies."""
+    """Write only validated rows for exact allowed task names and mapped companies."""
     source = build_dashboard_feed.outside_public_repo(input_path, "RMM source export")
     destination = build_dashboard_feed.outside_public_repo(output_path, "task-scoped RMM export")
     if input_path.is_symlink() or output_path.is_symlink():
@@ -62,8 +62,7 @@ def filter_export(
         raise FilterError("source and output paths must be different")
     if destination.exists():
         raise FilterError("task-scoped output already exists; choose a new private path")
-    if not task_name.strip() or task_name != task_name.strip() or task_name[:1] in "=+-@":
-        raise FilterError("task name must be a non-empty exact name and cannot begin with a spreadsheet formula prefix")
+    allowed_task_names = importer.normalize_task_names(task_names)
 
     clients = importer.load_clients(manifest_path)
     allowed_company_ids = set(clients)
@@ -107,7 +106,8 @@ def filter_export(
                     for row_number, row in enumerate(reader, start=2):
                         if row_number - 1 > MAX_ROWS:
                             raise FilterError("RMM source export exceeds the 10,000-row safety limit")
-                        if str(row.get("task_name") or "").strip() != task_name:
+                        task_name = str(row.get("task_name") or "").strip()
+                        if task_name not in allowed_task_names:
                             skipped_rows += 1
                             continue
 
@@ -161,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, type=Path, help="broad RMM CSV; source is left unchanged")
     parser.add_argument("--manifest", required=True, type=Path, help="private client manifest with RMM company IDs")
-    parser.add_argument("--task-name", required=True, help="exact Shadow AI collector task name")
+    parser.add_argument("--task-name", required=True, action="append", help="exact Shadow AI collector task name; repeat for additional platform/version tasks")
     parser.add_argument("--output", required=True, type=Path, help="new private task-scoped CSV outside this repository")
     parser.add_argument("--allow-truncated-rows", action="store_true", help="exclude malformed exact-30,000-character outputs and report them as incomplete")
     args = parser.parse_args(argv)
@@ -170,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     except (FilterError, importer.ImportError, build_dashboard_feed.FeedError, validate_observation.ObservationError) as exc:
         print(f"Could not create task-scoped Shadow AI export: {exc}", file=sys.stderr)
         return 1
-    print(f"Wrote {result.selected} validated rows for the exact task; skipped {result.skipped} unrelated task rows.")
+    print(f"Wrote {result.selected} validated rows for the selected exact task names; skipped {result.skipped} unrelated task rows.")
     if result.incomplete:
         print(f"Excluded {result.incomplete} malformed 30,000-character scanner output(s) as incomplete; inspect or re-export them.")
     print("The original export was left unchanged. Both files contain confidential telemetry; keep them in restricted storage.")
