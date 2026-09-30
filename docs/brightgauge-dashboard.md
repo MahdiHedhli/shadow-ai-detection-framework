@@ -48,6 +48,9 @@ the source history and should not be represented as deleted or verified safe.
    status, including clients with no observations. Show the newest overall scan
    and the oldest latest scan represented for each client, so aging coverage is
    sortable without implying a verified fleet denominator;
+   include collector-version counts from each endpoint's latest scan to expose
+   mixed or outdated task rollouts without suggesting that version alone proves
+   collection quality;
    never infer fleet coverage without a separately verified device-inventory
    denominator.
 
@@ -83,6 +86,7 @@ See the [ConnectWise Client Reporting guide](https://docs.connectwise.com/Bright
 | Open review | Current finding rows whose `review_status` is `open` | Current review queue; older, superseded findings are not included |
 | Endpoints with scans | Rows in `shadow-ai-scans.csv` with a collection timestamp | Endpoints represented in the working archive, not verified fleet coverage |
 | Scan health | Counts by `scan_status` and `partial` | Missing, partial, or failed coverage is not a clean result |
+| Collector version mix | Count of latest endpoint scan rows by `collector_version` | Shows rollout distribution, not freshness or scan correctness |
 | Confidence / evidence mix | Current finding counts by `confidence` and `evidence_level` | Collector evidence labels, not calibrated probability or severity |
 
 Do not sum distinct finding keys across overlapping groupings, convert unknown

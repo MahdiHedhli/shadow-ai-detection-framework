@@ -5,6 +5,7 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 
@@ -82,6 +83,7 @@ class InternalDashboardTests(unittest.TestCase):
             latest["collected_at"] = "2026-09-29T12:00:00.000Z"
             latest["findings"][0]["observed_at"] = latest["collected_at"]
             latest["collector"]["partial"] = True
+            latest["collector"]["version"] = "0.6.6"
             (root / "client-a" / "observations" / "latest.json").write_text(json.dumps(latest), encoding="utf-8")
 
             payload = dashboard.build_payload(manifest, None)
@@ -92,6 +94,10 @@ class InternalDashboardTests(unittest.TestCase):
         self.assertEqual(client_a_findings[0]["provider_id"], "openai")
         self.assertEqual(len(client_a_scans), 1)
         self.assertEqual(client_a_scans[0]["scan_status"], "partial")
+        self.assertEqual(client_a_scans[0]["collector_version"], "0.6.6")
+        self.assertIn('id="collectorVersions"', dashboard.DASHBOARD_HTML)
+        self.assertIn('collectorVersions.set(version,(collectorVersions.get(version)||0)+1)', dashboard.DASHBOARD_HTML)
+        self.assertIn('if(r.scan_status==="complete"||r.scan_status==="partial")', dashboard.DASHBOARD_HTML)
         self.assertNotIn("PRIVATE-HOST-client-a", dashboard.make_html(payload))
 
     def test_customer_export_requires_one_client_and_exports_filtered_client_rows(self) -> None:
@@ -116,12 +122,25 @@ class InternalDashboardTests(unittest.TestCase):
         html = dashboard.DASHBOARD_HTML
         self.assertIn('id="kLastScan"', html)
         self.assertIn('id="kLastScanSub"', html)
+        self.assertIn('id="refreshTimestamp"', html)
+        self.assertIn('data.refreshed_at', html)
+        self.assertIn('Dashboard build time unavailable', html)
+        self.assertIn('Dashboard rebuilt ${new Intl.DateTimeFormat', html)
         self.assertIn(
             'const newest=scans.filter(s=>s.collected_at&&Number.isFinite(Date.parse(s.collected_at)))',
             html,
         )
         self.assertIn('timeZone:"UTC"', html)
         self.assertIn('No scan timestamp is available in this scope', html)
+
+    def test_payload_records_dashboard_refresh_time_in_utc(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = self.make_private_inputs(Path(temporary))
+            payload = dashboard.build_payload(manifest, None)
+
+        refreshed = payload["refreshed_at"]
+        self.assertTrue(refreshed.endswith("Z"))
+        self.assertIsNotNone(datetime.fromisoformat(refreshed.replace("Z", "+00:00")).tzinfo)
 
     def test_client_comparison_can_sort_by_oldest_latest_endpoint_scan(self) -> None:
         html = dashboard.DASHBOARD_HTML
