@@ -193,6 +193,16 @@ expected run, keep the last validated dashboard state and obtain a fresh
 collector output. The dashboard's displayed scan timestamp remains the
 authoritative freshness cue for represented endpoints.
 
+A successful RMM task-history status is not proof that the corresponding
+`execution_output` is present in BrightGauge Automation Details. Validate that
+the exact scheduled task appears after a successful dataset sync, its execution
+timestamp is current, and its output parses as a complete observation. If a
+successful scheduled run is missing or its output is truncated, keep the
+dashboard unchanged; do not substitute aggregate run counts or a gauge
+drilldown that omits task identity. The remaining transport path must be
+validated against a supported RMM result-export mechanism before collection is
+treated as operational.
+
 When a task-scoped CSV export is available, `tools/import_rmm_task_export.py`
 can validate and append its JSON observations to the private per-client
 archives. Add each source `company_unique_id` to the matching client's private

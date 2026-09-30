@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shutil
 import sys
+import subprocess
 import tempfile
 import unittest
 from datetime import datetime
@@ -52,16 +55,76 @@ class InternalDashboardTests(unittest.TestCase):
         self.assertEqual(len(payload["findings"]), 2)
         self.assertEqual({row["client_id"] for row in payload["findings"]}, {"client-a", "client-b"})
         self.assertEqual(len(payload["scans"]), 2)
+        provider_ids = {row["provider_id"] for row in payload["inference_providers"]}
+        self.assertTrue({"anthropic", "openai"}.issubset(provider_ids))
+        self.assertTrue({"generic", "mcp"}.isdisjoint(provider_ids))
         page = dashboard.make_html(payload)
         self.assertNotIn("PRIVATE-HOST-", page)
         self.assertNotIn("local-test-user", page)
+        self.assertNotIn('"_endpoint_key"', page)
+        self.assertNotIn('"_observation_id"', page)
         self.assertIn('r.client_id!==client', page)
         self.assertIn("latest scan per endpoint", page)
         self.assertTrue(all("_endpoint_key" not in row and "_observation_id" not in row for row in payload["scans"]))
+        self.assertTrue(all("_endpoint_key" not in row and "_observation_id" not in row for row in payload["findings"]))
 
     def test_filter_defaults_fit_compact_controls(self) -> None:
         self.assertIn('>All providers/products</option>', dashboard.DASHBOARD_HTML)
         self.assertIn('placeholder="Domain, extension ID…"', dashboard.DASHBOARD_HTML)
+
+    def test_approved_provider_filter_is_client_scoped_and_composes_with_review_filters(self) -> None:
+        html = dashboard.DASHBOARD_HTML
+        self.assertIn('id="baselineProviderFilter" disabled', html)
+        self.assertIn('Client\'s approved inference providers', html)
+        self.assertIn('if(!clientId){fieldset.disabled=true;', html)
+        self.assertIn('baseline=client?selectedBaselineProviders():new Set(),baselineOnly=baselineOnlyObservations(baseline);', html)
+        self.assertIn('function baselineOnlyObservations(baseline)', html)
+        self.assertIn('row.provider_id==="generic"||row.provider_id==="mcp"', html)
+        self.assertIn('[...providers].every(id=>baseline.has(id))', html)
+        self.assertIn('baselineOnly.has(`${r.client_id}|${r.observation_id}`)', html)
+        self.assertIn('Endpoints with evidence only from selected providers are hidden.', html)
+        self.assertIn('Endpoints with additional providers remain visible with all their evidence', html)
+        self.assertIn('if(hide&&r.review_status!=="open")return false;', html)
+        self.assertIn('localStorage.setItem(`${baselineStoragePrefix}${clientId}`,JSON.stringify(ids))', html)
+        self.assertIn('function storedBaselineProviders(clientId)', html)
+        self.assertIn('saveBaselineProviders(activeProviderClient)', html)
+        self.assertIn('localStorage.removeItem(`${baselineStoragePrefix}${client.client_id}`)', html)
+        self.assertIn('baselineSelections.clear();try{for(const client of data.clients)', html)
+        self.assertIn('activeProviderClient=null;renderBaselineProviders(false)', html)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required to exercise dashboard JavaScript")
+    def test_approved_provider_filter_hides_only_baseline_only_endpoints(self) -> None:
+        html = dashboard.DASHBOARD_HTML
+        match = re.search(
+            r"(function baselineOnlyObservations\(baseline\)\{.*?\})\s*function filteredFindings\(\)",
+            html,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(match, "Could not extract the dashboard's provider-baseline function")
+        findings = [
+            {"client_id": "client-a", "observation_id": "claude-only", "provider_id": "anthropic"},
+            {"client_id": "client-a", "observation_id": "claude-only", "provider_id": "generic"},
+            {"client_id": "client-a", "observation_id": "mixed", "provider_id": "anthropic"},
+            {"client_id": "client-a", "observation_id": "mixed", "provider_id": "openai"},
+            {"client_id": "client-a", "observation_id": "openai-only", "provider_id": "openai"},
+            {"client_id": "client-b", "observation_id": "claude-only", "provider_id": "anthropic"},
+            {"client_id": "client-a", "observation_id": "mcp-only", "provider_id": "mcp"},
+        ]
+        script = (
+            "const data=JSON.parse(process.argv[1]);\n"
+            + match.group(1)
+            + "\nconsole.log(JSON.stringify([...baselineOnlyObservations(new Set(['anthropic']))].sort()));"
+        )
+        result = subprocess.run(
+            ["node", "-e", script, json.dumps({"findings": findings})],
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        self.assertEqual(
+            json.loads(result.stdout),
+            ["client-a|claude-only", "client-b|claude-only"],
+        )
 
     def test_incomplete_source_note_is_visible_and_rendered_as_text(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -126,6 +189,8 @@ class InternalDashboardTests(unittest.TestCase):
         self.assertNotIn('value===client.client_label&&incompleteClientIds.has(clientId)', html)
         self.assertIn('<label>Endpoints with reported scans</label>', html)
         self.assertIn('filteredFindings().filter(r=>r.client_id===clientId)', html)
+        self.assertIn('"baseline_provider_filter"', html)
+        self.assertIn('selectedBaselineProviderNames().join("; ")', html)
         self.assertIn('Print / Save as PDF', html)
         self.assertIn('excludes endpoint/local-user identities and reviewer notes', html)
         self.assertIn('pageSize:250', html)
