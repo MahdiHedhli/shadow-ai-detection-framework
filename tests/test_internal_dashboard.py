@@ -207,6 +207,9 @@ class InternalDashboardTests(unittest.TestCase):
         html = dashboard.make_html(payload)
 
         self.assertIn("function downloadBlob(blob,filename)", html)
+        self.assertIn("function clearDownload()", html)
+        self.assertIn("if(status)status.replaceChildren()", html)
+        self.assertIn("function render(){clearDownload();", html)
         self.assertIn("link.href=activeDownloadUrl;link.download=filename", html)
         self.assertIn("status.replaceChildren(document.createTextNode", html)
         self.assertIn('id="downloadStatus" role="status" aria-live="polite"', html)
