@@ -47,7 +47,7 @@ This backlog records work that should not be promoted to production until it has
 ## Ongoing MSP operations
 
 - Use the RMM task history as a pilot source only when it preserves full output, enforces tenant-scoped access, and supports validated export.
-- Implement and validate the self-contained client HTML report builder; keep archives and review decisions out of public GitHub.
+- Keep the private client HTML/PDF-ready and CSV exports aligned with filters; keep archives and review decisions out of public GitHub.
 - Make the technician dashboard reflect each endpoint's latest validated scan as the primary operational view; show freshness and partial/no-scan states rather than waiting for a monthly cycle.
 - Use a reviewed, client-scoped monthly email report (PDF snapshot) as the initial history mechanism. A long-term scan archive is optional unless a later audit or recalculation requirement calls for it.
 - Before automation, confirm scan cadence, a tenant-isolated working location, short-term retention/deletion rules, report date, recipient mapping, and access controls.
@@ -58,6 +58,7 @@ This backlog records work that should not be promoted to production until it has
 - Evaluate RMM-native reporting against Microsoft 365 report enrichment or a separate Shadow AI reporting service once RMM export, tenant isolation, and historical comparison capabilities are understood.
 - Preserve raw observations per tenant and generate cross-client MSP summaries only from non-identifying aggregates.
 - Add health reporting for collector version, partial coverage, stale endpoints, runtime, and output truncation before scheduling broadly.
+- Update legacy RMM assignments to the bounded-output collector version; re-run task results whose Automation Details output hit the 30,000-character limit, then confirm the imported scans are complete before treating the dashboard as current.
 - Keep discovery separate from remediation. Blocking, uninstalling, or alert escalation requires corroborating evidence and an approved client policy.
 
 ## Exit criteria for broad Mac rollout

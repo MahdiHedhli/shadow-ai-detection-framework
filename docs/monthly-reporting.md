@@ -329,7 +329,12 @@ task-scoped export workflow and private manifest must be established separately.
 Do not extract or publish the raw `execution_output` field wholesale. The
 lower-level `tools/build_dashboard_feed.py` and
 `tools/build_internal_dashboard.py` commands remain available for independent
-rebuilds. Customer-facing HTML remains a separate one-client build.
+rebuilds. The private technician dashboard also provides a single-client,
+currently-filtered HTML report export with a print-to-PDF action and selected-
+client CSV export. Both are disabled until exactly one client is selected;
+neither includes endpoint/local-user identities or reviewer notes. Use
+`tools/build_report.py` when a standalone observation-archive report is needed
+outside the dashboard.
 
 ## Private internal HTML dashboard
 

@@ -98,7 +98,12 @@ class InternalDashboardTests(unittest.TestCase):
         html = dashboard.DASHBOARD_HTML
         self.assertIn('$("export").disabled=!$("client").value', html)
         self.assertIn('filteredFindings().filter(r=>r.client_id===clientId)', html)
-        self.assertIn('Customer CSV export is disabled for the all-client view', html)
+        self.assertIn('Customer exports are disabled for the all-client view', html)
+        self.assertIn('$("exportReport").disabled=!$("client").value', html)
+        self.assertIn('function exportClientReport()', html)
+        self.assertIn('filteredFindings().filter(r=>r.client_id===clientId)', html)
+        self.assertIn('Print / Save as PDF', html)
+        self.assertIn('excludes endpoint/local-user identities and reviewer notes', html)
         self.assertIn('pageSize:250', html)
         self.assertIn('Export includes all filtered rows for the selected client.', html)
         self.assertIn('timeZone:"UTC"', html)
