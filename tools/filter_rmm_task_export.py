@@ -39,6 +39,7 @@ class FilterResult(NamedTuple):
     selected: int
     skipped: int
     incomplete: int
+    incomplete_company_ids: tuple[str, ...]
 
 
 def parse_scanner_output(raw: str) -> dict[str, Any]:
@@ -88,6 +89,7 @@ def filter_export(
     selected_rows = 0
     skipped_rows = 0
     incomplete_rows = 0
+    incomplete_company_ids: set[str] = set()
     validated_bytes = 0
     try:
         descriptor, temporary = tempfile.mkstemp(prefix=".shadow-ai-task-filter-", suffix=".tmp", dir=destination.parent)
@@ -128,6 +130,7 @@ def filter_export(
                         except (json.JSONDecodeError, importer.rmm_output.RmmOutputError, validate_observation.ObservationError, TypeError, KeyError, AttributeError) as exc:
                             if allow_truncated_rows and len(raw) == BRIGHTGAUGE_OUTPUT_CELL_LIMIT:
                                 incomplete_rows += 1
+                                incomplete_company_ids.add(company_id)
                                 continue
                             raise FilterError(f"selected task row {row_number} has invalid scanner JSON: {exc}") from exc
 
@@ -160,7 +163,7 @@ def filter_export(
     finally:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
-    return FilterResult(selected_rows, skipped_rows, incomplete_rows)
+    return FilterResult(selected_rows, skipped_rows, incomplete_rows, tuple(sorted(incomplete_company_ids)))
 
 
 def main(argv: list[str] | None = None) -> int:

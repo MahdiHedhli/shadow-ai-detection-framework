@@ -69,7 +69,7 @@ class FilterRmmExportTests(unittest.TestCase):
             if os.name == "posix":
                 source.chmod(0o644)
 
-            self.assertEqual(task_filter.filter_export(source, self.make_manifest(root), TASK, output), (1, 1, 0))
+            self.assertEqual(task_filter.filter_export(source, self.make_manifest(root), TASK, output), (1, 1, 0, ()))
 
             self.assertEqual(source.read_bytes(), source_before)
             if os.name == "posix":
@@ -107,7 +107,7 @@ class FilterRmmExportTests(unittest.TestCase):
                 output,
             )
 
-            self.assertEqual(result, (2, 1, 0))
+            self.assertEqual(result, (2, 1, 0, ()))
             with output.open("r", encoding="utf-8", newline="") as handle:
                 rows = list(csv.DictReader(handle))
             self.assertEqual({row["task_name"] for row in rows}, {TASK, "Shadow AI Inventory - macOS (Perl)"})
@@ -180,7 +180,7 @@ class FilterRmmExportTests(unittest.TestCase):
                 "unrelated_column": "must-not-copy",
             }])
 
-            self.assertEqual(task_filter.filter_export(source, self.make_manifest(root), TASK, output), (1, 0, 0))
+            self.assertEqual(task_filter.filter_export(source, self.make_manifest(root), TASK, output), (1, 0, 0, ()))
             with output.open("r", encoding="utf-8", newline="") as handle:
                 row = next(csv.DictReader(handle))
             self.assertFalse(row["execution_output"].startswith(rmm_output.PREFIX))
@@ -201,7 +201,7 @@ class FilterRmmExportTests(unittest.TestCase):
             self.assertFalse(output.exists())
 
             result = task_filter.filter_export(source, self.make_manifest(root), TASK, output, allow_truncated_rows=True)
-            self.assertEqual(result, (1, 0, 1))
+            self.assertEqual(result, (1, 0, 1, ("company-001",)))
             with output.open("r", encoding="utf-8", newline="") as handle:
                 self.assertEqual(len(list(csv.DictReader(handle))), 1)
 

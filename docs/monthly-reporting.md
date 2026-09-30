@@ -84,12 +84,38 @@ python3 tools/build_dashboard_feed.py \
 The findings feed's grain is one finding in each endpoint's latest scan. The
 scans feed has one row per endpoint's latest scan and preserves a latest scan
 with zero findings; it emits `no_observations` rather than implying a clean scan
-when a client has no data for the selected period. The feeds do not backfill
-older findings when a newer scan omits them. Use `finding_key` as the stable,
-pseudonymous signal identity. The two feeds can power client,
+when a client has no data for the selected period. Both feeds include a
+deterministic SHA-256 `id` row key for stable row identity during ingestion and
+refresh. Verify BrightGauge's CSV update/replace behavior before production. Finding
+IDs are derived from the mapped client ID, observation ID, and finding ID;
+scan IDs use the mapped client ID and observation ID (or client ID and period
+for a no-observation row). These IDs omit endpoint names but are not secrets
+or an anonymization guarantee. The feeds do not backfill older findings when a
+newer scan omits them. Use `finding_key` as the stable, pseudonymous signal
+identity. The two feeds can power client,
 provider, product, category, confidence, evidence, and review-state filters.
 Client exports must apply the same selected-client scope to every view and must
 not include other clients' rows.
+
+### BrightGauge dataset model
+
+Keep the two grains in separate datasets so scan-coverage counts are not
+confused with finding-row counts. In the CSV dataset setup, use `id` as the
+stable text row identifier and `client_label` as the client-mapping column;
+confirm those roles in BrightGauge before saving. Planned field types are:
+
+| Dataset | Grain and primary dimensions | Numeric/date fields | Client mapping |
+| --- | --- | --- | --- |
+| `shadow-ai-findings.csv` | One finding in each endpoint's latest scan; dimensions include `client_label`, `provider_name`, `product`, `category`, `confidence`, `review_status`, and `os_family` | `confidence_rank`, `evidence_level` as numbers; `observed_at`, `collected_at`, `reviewed_at` as dates/timestamps | `client_label` |
+| `shadow-ai-scans.csv` | One latest scan per endpoint; dimensions include `client_label`, `os_family`, `collector_version`, and `scan_status` | `finding_observations` as a number; `partial` as boolean; `collected_at` as date/timestamp | `client_label` |
+
+Use row count on the findings dataset for finding observations, not unique
+users or devices. Use scan-row count for represented latest scans, and sum
+`finding_observations` only within the scans dataset. `client_id` is the stable
+internal filter key; keep it alongside the display/mapping label. Treat IDs,
+client labels, domains, and extension metadata as confidential. Do not add a
+client-facing report until a single-client filter preview proves the dataset's
+client mapping is functioning.
 
 The existing RMM automation-history dataset is a separate run-count source and
 must not be combined with finding metrics. BrightGauge's **Upload CSV** dataset
@@ -166,6 +192,13 @@ public example or in this repository. If the UI only provides a broader
 Automation Details export, use the one-command refresh below. It performs the
 exact-task reduction in restricted temporary storage before import; never load
 the broad export itself directly into the dashboard pipeline.
+
+Do not treat a gauge drilldown CSV as equivalent to the dataset export. A
+recent pilot-run drilldown omitted `task_name`, and its `execution_output`
+cells were not valid JSON (including one cell at the 30,000-character export
+limit). The importer must reject that file; do not repair delimiters or infer
+missing task identity. Use the row-level Automation Details dataset export or
+another source that passes the required-column and observation-schema checks.
 
 For a first refresh without an existing manifest, `tools/discover_rmm_clients.py`
 can create a private mapping from only the selected task's `company_unique_id`
@@ -359,13 +392,15 @@ and oldest latest scan time per client; and scan-health status. Finding values
 honor every active finding filter. Endpoint counts reflect only scan
 records present in the archive and are not a verified fleet denominator. A
 latest partial scan remains partial; older findings are not backfilled into the
-present-state view. Customer CSV export stays disabled until one client is
-selected and exports only that client's currently filtered findings. Endpoint
-and local-user identities, reviewer names, and review reasons are omitted from
-this multi-client view and customer CSV. Use the separate monthly client report
-for historical context and retain its PDF as the human-readable monthly
-snapshot. For a fuller customer-facing HTML report with endpoint details,
-continue using `tools/build_report.py` once per client.
+present-state view. Customer CSV and HTML report exports stay disabled until
+one client is selected and include only that client's currently filtered
+findings. The customer HTML report also includes summary metrics, charts, and
+any applicable source-export quality warning. Endpoint and local-user
+identities, reviewer names, and review reasons are omitted from both customer
+exports. Retain the delivered monthly email/PDF as the historical snapshot.
+Browser-created customer exports inherit the browser's local download
+permissions; restrict the files before sharing or retaining them, and only
+share through an approved client delivery channel.
 
 The output is a self-contained file embedding the included client telemetry;
 it makes no network requests and has no built-in SSO/MFA protection. The

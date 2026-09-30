@@ -27,14 +27,14 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_SCHEMA_VERSION = "1.0"
 CLIENT_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 FINDING_FIELDS = [
-    "schema_version", "client_id", "client_label", "finding_key", "finding_id",
+    "schema_version", "id", "client_id", "client_label", "finding_key", "finding_id",
     "observation_id", "collected_at", "observed_at", "os_family", "provider_id",
     "provider_name", "product", "category", "capability", "confidence",
     "confidence_rank", "evidence_level", "review_status", "reviewed_at", "browser", "matched_domain",
     "extension_id", "display_name", "version", "classification_basis",
 ]
 SCAN_FIELDS = [
-    "schema_version", "client_id", "client_label", "period", "collected_at",
+    "schema_version", "id", "client_id", "client_label", "period", "collected_at",
     "os_family", "collector_version", "scan_status", "partial", "finding_observations",
     "scope",
 ]
@@ -210,6 +210,12 @@ def safe_attribute(attributes: dict[str, Any], name: str) -> str:
     return ""
 
 
+def stable_feed_id(*parts: str) -> str:
+    """Return a deterministic opaque row ID without exposing endpoint identity."""
+    material = "\x1f".join(parts).encode("utf-8")
+    return hashlib.sha256(material).hexdigest()
+
+
 def load_client_data(
     client: dict[str, Any],
     period: str | None,
@@ -236,6 +242,7 @@ def load_client_data(
     for observation in observations:
         scan_rows.append({
             "schema_version": MANIFEST_SCHEMA_VERSION,
+            "id": stable_feed_id("scan", client["client_id"], observation["observation_id"]),
             "client_id": client["client_id"],
             "client_label": client["client_label"],
             # Used only in-memory by the internal current-state dashboard to
@@ -264,6 +271,9 @@ def load_client_data(
             review = decisions.get(finding_key, {})
             row = {
                 "schema_version": MANIFEST_SCHEMA_VERSION,
+                "id": stable_feed_id(
+                    "finding", client["client_id"], observation["observation_id"], finding["finding_id"]
+                ),
                 "client_id": client["client_id"],
                 "client_label": client["client_label"],
                 "finding_key": finding_key,
@@ -294,6 +304,7 @@ def load_client_data(
     if not observations:
         scan_rows.append({
             "schema_version": MANIFEST_SCHEMA_VERSION,
+            "id": stable_feed_id("scan", client["client_id"], "no_observations", period or ""),
             "client_id": client["client_id"],
             "client_label": client["client_label"],
             "period": period or "",

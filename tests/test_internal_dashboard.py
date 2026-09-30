@@ -59,16 +59,25 @@ class InternalDashboardTests(unittest.TestCase):
         self.assertIn("latest scan per endpoint", page)
         self.assertTrue(all("_endpoint_key" not in row and "_observation_id" not in row for row in payload["scans"]))
 
+    def test_filter_defaults_fit_compact_controls(self) -> None:
+        self.assertIn('>All providers/products</option>', dashboard.DASHBOARD_HTML)
+        self.assertIn('placeholder="Domain, extension ID…"', dashboard.DASHBOARD_HTML)
+
     def test_incomplete_source_note_is_visible_and_rendered_as_text(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             manifest = self.make_private_inputs(Path(temporary))
             note = 'Source export incomplete: 1 result excluded <script>alert("x")</script>.'
-            payload = dashboard.build_payload(manifest, None, note)
+            payload = dashboard.build_payload(manifest, None, note, ["client-a"])
         page = dashboard.make_html(payload)
         self.assertIn('id="importNotice" hidden', page)
         self.assertIn('$("importNotice").textContent=data.import_note', page)
         self.assertNotIn('Source export incomplete: 1 result excluded <script>', page)
         self.assertIn("Source export incomplete: 1 result excluded", page)
+        self.assertIn('new Set(data.incomplete_client_ids||[])', page)
+        self.assertIn('Affected client(s): ${affected.join(", ")}.', page)
+        self.assertIn('const qualityNotice=incompleteClientIds.has(clientId)?', page)
+        self.assertIn("a truncated scanner result for this client was excluded", page)
+        self.assertIn('${qualityNotice}<div class="scope">', page)
 
     def test_payload_uses_only_latest_scan_per_endpoint_without_backfilling_partial(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -105,8 +114,16 @@ class InternalDashboardTests(unittest.TestCase):
         self.assertIn('$("export").disabled=!$("client").value', html)
         self.assertIn('filteredFindings().filter(r=>r.client_id===clientId)', html)
         self.assertIn('Customer exports are disabled for the all-client view', html)
+        self.assertIn('Browser downloads use local default permissions', html)
         self.assertIn('$("exportReport").disabled=!$("client").value', html)
         self.assertIn('function exportClientReport()', html)
+        self.assertIn('"source_export_quality"', html)
+        self.assertIn('incomplete_truncated_scanner_result_excluded', html)
+        self.assertIn('const qualityNotice=incompleteClientIds.has(clientId)?', html)
+        self.assertIn('${qualityNotice}<div class="scope">', html)
+        self.assertIn('a truncated scanner result for this client was excluded', html)
+        self.assertNotIn('value===client.client_label&&incompleteClientIds.has(clientId)', html)
+        self.assertIn('<label>Endpoints with reported scans</label>', html)
         self.assertIn('filteredFindings().filter(r=>r.client_id===clientId)', html)
         self.assertIn('Print / Save as PDF', html)
         self.assertIn('excludes endpoint/local-user identities and reviewer notes', html)

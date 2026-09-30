@@ -258,6 +258,48 @@ class RefreshDashboardTests(unittest.TestCase):
                 for directory in (feeds_dir, html_dir, root / "client-a", root / "client-a/observations"):
                     self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
 
+    def test_truncated_export_is_attributed_to_client_in_dashboard_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest = root / "clients.json"
+            manifest.write_text(json.dumps({
+                "schema_version": "1.0",
+                "clients": [{
+                    "client_id": "client-a",
+                    "client_label": "Client A",
+                    "rmm_company_unique_id": "company-001",
+                    "observations": "client-a/observations",
+                }],
+            }), encoding="utf-8")
+            document = observation("PRIVATE-TEST-HOST", "anthropic", "browser_extension", {"extension_name": "Claude"})
+            export = root / "broad-export.csv"
+            with export.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["company_unique_id", "task_name", "execution_output"])
+                writer.writeheader()
+                writer.writerows([
+                    {"company_unique_id": "company-001", "task_name": TASK, "execution_output": json.dumps(document)},
+                    {"company_unique_id": "company-001", "task_name": TASK, "execution_output": "x" * 30_000},
+                ])
+            staging = root / "staging"
+            staging.mkdir(mode=0o700)
+            feeds = root / "feeds"
+            feeds.mkdir(mode=0o700)
+            html_dir = root / "html"
+            html_dir.mkdir(mode=0o700)
+
+            result = refresh_dashboard_from_rmm_export.refresh_from_export(
+                export, manifest, TASK, staging, feeds, html_dir / "dashboard.html",
+                allow_truncated_rows=True,
+            )
+
+            self.assertEqual(result[-1], 1)
+            page = result[6].read_text(encoding="utf-8")
+            self.assertIn('"incomplete_client_ids":["client-a"]', page)
+            self.assertIn('"client_label":"Client A"', page)
+            self.assertIn('const qualityNotice=incompleteClientIds.has(clientId)?', page)
+            self.assertIn("a truncated scanner result for this client was excluded", page)
+            self.assertNotIn("PRIVATE-TEST-HOST", page)
+
     def test_refresh_refuses_overwrite_without_explicit_flag(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

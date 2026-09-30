@@ -47,9 +47,14 @@ def refresh_from_export(
             input_path, manifest_path, task_name, scoped_export, allow_truncated_rows
         )
         import_note = (
-            f"Source export incomplete: {filter_result.incomplete} scanner result(s) were exactly 30,000 characters and could not be validated. Their findings are excluded; they may be truncated at the export limit. Re-export or rerun them before treating this view as complete."
+            f"Source export incomplete: {filter_result.incomplete} scanner result(s) were exactly 30,000 characters and could not be validated. Their findings are excluded; they may be truncated at the export limit. Affected client(s) are identified below. Re-export or rerun them before treating this view as complete."
             if filter_result.incomplete else None
         )
+        clients_by_company = import_rmm_task_export.load_clients(manifest_path)
+        incomplete_client_ids = sorted({
+            clients_by_company[company_id]["client_id"]
+            for company_id in filter_result.incomplete_company_ids
+        })
         result = refresh_dashboard.refresh(
             scoped_export,
             manifest_path,
@@ -59,6 +64,7 @@ def refresh_from_export(
             period,
             overwrite,
             import_note,
+            incomplete_client_ids,
         )
     return (*result, filter_result.selected, filter_result.skipped, filter_result.incomplete)
 

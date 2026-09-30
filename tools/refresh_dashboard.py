@@ -30,6 +30,7 @@ def refresh(
     period: str | None = None,
     overwrite: bool = False,
     import_note: str | None = None,
+    incomplete_client_ids: list[str] | None = None,
 ) -> tuple[int, int, int, int, Path, Path, Path]:
     """Import explicitly allowed exact RMM task exports, then rebuild all private views."""
     output_dir = build_dashboard_feed.outside_public_repo(output_dir, "dashboard feed directory")
@@ -80,7 +81,7 @@ def refresh(
         overwrite,
     )
 
-    payload = build_internal_dashboard.build_payload(manifest_path, period, import_note)
+    payload = build_internal_dashboard.build_payload(manifest_path, period, import_note, incomplete_client_ids)
     dashboard = build_internal_dashboard.write_dashboard(
         dashboard_path, build_internal_dashboard.make_html(payload), overwrite
     )

@@ -212,6 +212,11 @@ class DashboardFeedTests(unittest.TestCase):
             )
         self.assertEqual(rows[0]["finding_id"], document["findings"][0]["finding_id"])
         self.assertEqual(len(rows[0]["finding_key"]), 64)
+        self.assertEqual(len(rows[0]["id"]), 64)
+        self.assertEqual(
+            rows[0]["id"],
+            feed.stable_feed_id("finding", "client-c", document["observation_id"], document["findings"][0]["finding_id"]),
+        )
 
     def test_brightgauge_feed_uses_latest_scan_per_endpoint_without_backfilling(self) -> None:
         older = observation("TEST-ENDPOINT", "anthropic", "browser_extension", {"extension_name": "Claude"})
@@ -249,8 +254,10 @@ class DashboardFeedTests(unittest.TestCase):
             scans_csv = feed.make_csv(scans, feed.SCAN_FIELDS)
 
         self.assertEqual(len(scans), 2)
+        self.assertEqual(len({row["id"] for row in scans}), len(scans))
         self.assertEqual({row["finding_observations"] for row in scans}, {0, 1})
         self.assertEqual(len(findings), 1)
+        self.assertEqual(len({row["id"] for row in findings}), len(findings))
         self.assertEqual(findings[0]["provider_id"], "openai")
         self.assertIn("ChatGPT", findings_csv)
         self.assertNotIn("Claude", findings_csv)
