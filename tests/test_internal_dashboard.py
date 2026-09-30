@@ -176,6 +176,11 @@ class InternalDashboardTests(unittest.TestCase):
         )
         self.assertNotIn('||key==="evidence_level")return String(row[key]', html)
 
+    def test_initial_and_reset_sort_show_newest_observations_first(self) -> None:
+        html = dashboard.DASHBOARD_HTML
+        self.assertIn('<option value="desc" selected>Descending</option>', html)
+        self.assertIn('$("sortDirection").value="desc";state.sort="observed_at"', html)
+
     def test_no_observation_status_remains_explicit_for_empty_client_archive(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

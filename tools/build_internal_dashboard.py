@@ -147,7 +147,7 @@ DASHBOARD_HTML = r'''<!doctype html>
 <div class="field"><label for="review">Review state</label><select id="review"><option value="">All review states</option><option value="open">Open</option><option value="acknowledged">Acknowledged</option><option value="justified">Justified</option></select></div>
 <div class="field"><label for="search">Search evidence</label><input id="search" type="search" placeholder="Domain, extension ID…" autocomplete="off"></div>
 <label class="hide-wrap"><input id="hideReviewed" type="checkbox"> Hide acknowledged / justified</label>
-<div class="field"><label for="sortDirection">Sort order</label><select id="sortDirection"><option value="asc">Ascending</option><option value="desc">Descending</option></select></div>
+<div class="field"><label for="sortDirection">Sort order</label><select id="sortDirection"><option value="asc">Ascending</option><option value="desc" selected>Descending</option></select></div>
 <div class="filter-actions"><button class="btn" id="reset" type="button">Reset</button><button class="btn" id="exportReport" type="button" disabled>Export client report</button><button class="btn primary" id="export" type="button" disabled>Export client CSV</button></div>
 <p class="scope-hint" id="scopeHint"></p>
 </section>
