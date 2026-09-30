@@ -184,6 +184,15 @@ tenant's CSV export delivers the file by email rather than directly to
 restricted staging, do not use that workflow as unattended collection; choose
 an approved retrieval path first.
 
+Check scan freshness inside each selected task row before treating an export as
+a current inventory. Compare the row's `last_executed_on` with the embedded
+observation's `collected_at` and the expected collection window; the CSV email,
+download, or file-modified timestamp only describes export delivery, not when
+the endpoint was scanned. If the task row or embedded observation predates the
+expected run, keep the last validated dashboard state and obtain a fresh
+collector output. The dashboard's displayed scan timestamp remains the
+authoritative freshness cue for represented endpoints.
+
 When a task-scoped CSV export is available, `tools/import_rmm_task_export.py`
 can validate and append its JSON observations to the private per-client
 archives. Add each source `company_unique_id` to the matching client's private
