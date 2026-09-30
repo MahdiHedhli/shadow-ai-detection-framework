@@ -66,10 +66,14 @@ class FilterRmmExportTests(unittest.TestCase):
                 },
             ])
             source_before = source.read_bytes()
+            if os.name == "posix":
+                source.chmod(0o644)
 
             self.assertEqual(task_filter.filter_export(source, self.make_manifest(root), TASK, output), (1, 1, 0))
 
             self.assertEqual(source.read_bytes(), source_before)
+            if os.name == "posix":
+                self.assertEqual(source.stat().st_mode & 0o777, 0o600)
             with output.open("r", encoding="utf-8", newline="") as handle:
                 rows = list(csv.DictReader(handle))
             self.assertEqual(len(rows), 1)

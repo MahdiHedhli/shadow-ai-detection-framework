@@ -67,7 +67,13 @@ def filter_export(
     clients = importer.load_clients(manifest_path)
     allowed_company_ids = set(clients)
     try:
-        source_size = source.stat().st_size
+        source_stat = source.stat()
+        if not source.is_file():
+            raise FilterError("RMM source export must be a regular file")
+        # Browser downloads commonly arrive with group/world-readable modes.
+        # Tighten the local source before reading its client telemetry.
+        os.chmod(source, 0o600)
+        source_size = source_stat.st_size
     except OSError as exc:
         raise FilterError(f"could not inspect source export: {exc}") from exc
     if source_size > MAX_EXPORT_BYTES:
