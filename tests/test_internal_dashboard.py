@@ -115,6 +115,7 @@ class InternalDashboardTests(unittest.TestCase):
         self.assertIn('filteredFindings().filter(r=>r.client_id===clientId)', html)
         self.assertIn('Customer exports are disabled for the all-client view', html)
         self.assertIn('Browser downloads use local default permissions', html)
+        self.assertIn('.download-status{grid-column:1/-1', html)
         self.assertIn('$("exportReport").disabled=!$("client").value', html)
         self.assertIn('function exportClientReport()', html)
         self.assertIn('"source_export_quality"', html)
