@@ -135,6 +135,19 @@ class InternalDashboardTests(unittest.TestCase):
         self.assertNotIn('"reviewer"', html)
         self.assertNotIn('"reason"', html)
 
+    def test_customer_downloads_attach_blob_links_before_clicking(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            payload = dashboard.build_payload(self.make_private_inputs(Path(temporary)), None)
+        html = dashboard.make_html(payload)
+
+        self.assertIn("function downloadBlob(blob,filename)", html)
+        self.assertIn("link.href=activeDownloadUrl;link.download=filename", html)
+        self.assertIn("status.replaceChildren(document.createTextNode", html)
+        self.assertIn('id="downloadStatus" role="status" aria-live="polite"', html)
+        self.assertIn("downloadBlob(new Blob([csv]", html)
+        self.assertIn("downloadBlob(new Blob([report]", html)
+        self.assertNotIn("a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)", html)
+
     def test_current_state_shows_newest_scan_time_in_selected_scope(self) -> None:
         html = dashboard.DASHBOARD_HTML
         self.assertIn('id="kLastScan"', html)
