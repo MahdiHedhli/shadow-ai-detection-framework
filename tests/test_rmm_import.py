@@ -174,6 +174,29 @@ class RmmImportTests(unittest.TestCase):
             with self.assertRaisesRegex(importer.ImportError, "rmm_company_unique_id"):
                 importer.load_clients(unscoped)
 
+    def test_rejects_pilot_run_drilldown_without_task_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest = self.make_manifest(root)
+            export = root / "pilot-run-drilldown.csv"
+            fields = [
+                "company_name", "site_name", "site_id", "system_name",
+                "system_friendly_name", "task_type", "task_frequency",
+                "task_status", "execution_output", "created_on",
+                "last_executed_on", "timezone_name", "company_unique_id",
+            ]
+            with export.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=fields)
+                writer.writeheader()
+                writer.writerow({
+                    "company_unique_id": "company-001",
+                    "execution_output": "not-valid-observation-json",
+                })
+
+            with self.assertRaisesRegex(importer.ImportError, "missing required columns"):
+                importer.import_export(export, manifest, TASK)
+            self.assertFalse((root / "client-a").exists())
+
     def test_rejects_duplicate_rmm_company_ids_in_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
