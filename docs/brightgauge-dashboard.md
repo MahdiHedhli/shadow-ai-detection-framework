@@ -191,6 +191,30 @@ The default proposal is three scans per month and a monthly report after the fin
 this is not an active schedule. Confirm recipients, timezone, failure
 handling, and client-specific authorization before automation.
 
+When the BrightGauge Automation Details export is stale or truncates the
+latest run, use `tools/refresh_dashboard_from_rmm_output.py` with a separately
+saved, single-run scanner output file. The importer validates the observation,
+matches the selected client label to the private manifest, checks collector and
+task platform consistency, and routes the one observation through the same
+archive/feed/dashboard refresh. It does not retrieve data from RMM itself.
+Save the file in approved private storage, restrict it to the operator
+(`chmod 600` on macOS/Linux), and keep the manifest, staging, archive, feeds,
+and HTML dashboard outside the public repository. The input must be one raw
+scanner JSON document or its `SHADOWAI_GZIP_V1:` transport envelope; do not
+paste raw output into shell history, tickets, or source control.
+
+```bash
+python3 tools/refresh_dashboard_from_rmm_output.py \
+  --input /secure/shadow-ai/latest-run.json \
+  --manifest /secure/shadow-ai/dashboard-clients.json \
+  --client 'Exact client label from manifest' \
+  --task-name 'Shadow AI Inventory - Windows v0.6.6' \
+  --staging-dir /secure/shadow-ai/staging \
+  --output-dir /secure/shadow-ai/brightgauge-feed \
+  --dashboard /secure/shadow-ai/internal-dashboard.html \
+  --overwrite
+```
+
 Current implementation boundary: the repository can import a task-scoped RMM
 export, validate it, build the two latest-state CSV feeds, and create a private
 interactive HTML dashboard. BrightGauge supports CSV datasets through a
